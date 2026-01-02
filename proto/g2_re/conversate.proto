@@ -1,0 +1,82 @@
+syntax = "proto3";
+package even_connect.g2.conversate;
+
+
+enum ConversateTagType {
+    TAG_TYPE_NONE = 0; // 1d55db1
+    TAG_TYPE_KNOWLEDGE = 1; // 1d55d91
+    TAG_TYPE_QUESTION = 2; // 1d55d71
+    TAG_TYPE_PEOPLEWIKI = 3; // 1d55d51
+    TAG_TYPE_SUGGEST = 4; // 1d55d31
+}
+enum ConversateErrorCode {
+    CONVERSATE_SUCCESS = 0; // 1d55df1
+    CONVERSATE_ERR_FAIL = 1; // 1d55dd1
+}
+enum ConversateCtrlCmd {
+    CMD_NONE = 0; // 1d55eb1
+    START = 1; // 1d55e71
+    CLOSE = 2; // 1d55e11
+    PAUSE = 3; // 1d55e31
+    RESUME = 4; // 1d55e51
+    CONFIG = 5; // 1d55e91
+}
+enum ConversateCommandId {
+    CONVERSATE_NONE = 0; // 1d55fd1
+    CONVERSATE_CONTROL = 1; // 1d55fb1
+    CONVERSATE_TITLE_DATA = 2; // 1d55f91
+    CONVERSATE_KEYPOINT_DATA = 3; // 1d55f71
+    CONVERSATE_TAG_DATA = 4; // 1d55f51
+    CONVERSATE_TRANSCRIBE_DATA = 5; // 1d55f31
+    CONVERSATE_STATUS_NOTIFY = 161; // 1d55f11
+    CONVERSATE_COMM_RESP = 162; // 1d55ef1
+    CONVERSATE_HEART_BEAT = 255; // 1d55ed1
+}
+message ConversateHeartBeat {
+}
+message ConversateCommResp {
+    ConversateErrorCode errCode = 1; //      0x13ce4f4 - e tc=UNKNOWN
+}
+message ConversateStatusNotify {
+    ConversateCtrlCmd cmd = 1; //      0x13ce2ec - e tc=UNKNOWN
+    ConversateErrorCode errCode = 2; //      0x13ce328 - e tc=UNKNOWN
+}
+message ConversateTranscribeData {
+    bytes transcribeText = 1; //      0x13ce1e8 - a tc=32
+    int32 transcribeEndFlag = 2; //      0x13ce214 - a tc=32768
+}
+message ConversateTagData {
+    ConversateTagType tagType = 1; //      0x13ce0c8 - e tc=UNKNOWN
+    bytes tagText = 2; //      0x13ce0f4 - a tc=32
+    bytes tagTextExtend = 3; //      0x13ce120 - a tc=32
+}
+message ConversateKeypointData {
+    bytes summary = 1; //      0x13cd81c - a tc=32
+    repeated bytes keypointText = 2; //      0x13cd848 - p tc=34
+}
+message ConversateTitleData {
+    bytes title = 1; //      0x13cd754 - a tc=32
+}
+message ConversateControl {
+    ConversateCtrlCmd cmd = 1; //      0x13cd568 - e tc=UNKNOWN
+    optional ConversateSettings settings = 2; //      0x13cd59c - aOM tc=UNKNOWN
+}
+message ConversateSettings {
+    int32 summaryAndTag = 1; //      0x13cd40c - a tc=32768
+    int32 transcribe = 2; //      0x13cd438 - a tc=32768
+    int32 autoPopEn = 3; //      0x13cd464 - a tc=32768
+    int32 useAudio = 4; //      0x13cd490 - a tc=32768
+}
+message ConversateDataPackage {
+    //  // Object contains ONEOF - I dont think this affects wire encoding: : int None = 16; //      0x13cb618 - oo tc=UNKNOWN
+    ConversateCommandId commandId = 1; //      0x13cb654 - e tc=UNKNOWN
+    int32 magicRandom = 2; //      0x13cb680 - a tc=32768
+    optional ConversateControl ctrl = 3; //      0x13cb6b4 - aOM tc=UNKNOWN
+    optional ConversateTitleData titleData = 4; //      0x13cb6e8 - aOM tc=UNKNOWN
+    optional ConversateKeypointData keypointData = 5; //      0x13cb71c - aOM tc=UNKNOWN
+    optional ConversateTagData tagData = 6; //      0x13cb750 - aOM tc=UNKNOWN
+    optional ConversateTranscribeData transcribeData = 7; //      0x13cb784 - aOM tc=UNKNOWN
+    optional ConversateStatusNotify statusNotify = 8; //      0x13cb7b8 - aOM tc=UNKNOWN
+    optional ConversateCommResp commResp = 9; //      0x13cb7ec - aOM tc=UNKNOWN
+    optional ConversateHeartBeat heartBeat = 10; //      0x13cb820 - aOM tc=UNKNOWN
+}

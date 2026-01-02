@@ -1,0 +1,42 @@
+syntax = "proto3";
+package even_connect.g2.onboarding;
+
+import "common.proto";
+
+enum eOnboardingEvent {
+    UNKNOWN_EVENT = 0; // 1d54211
+    GLS_WEAR_STATUS = 1; // 1d541f1
+}
+enum eOnboardingProcessId {
+    UNKNOWN_PROCESS = 0; // 1d542b1
+    START_UP = 1; // 1d54291
+    TOUCH = 2; // 1d54251
+    HEAD_UP = 3; // 1d54271
+    FINISH = 4; // 1d54231
+}
+enum eOnboardingCommandId {
+    NONE_COMMAND = 0; // 1d54331
+    CONFIG = 1; // 1d54311
+    HEARTBEAT = 2; // 1d542f1
+    EVENT = 3; // 1d542d1
+}
+message OnboardingEvent {
+    eOnboardingEvent event = 1; //      0x13daa94 - e tc=UNKNOWN
+    int32 eventParam = 2; //      0x13daac0 - a tc=32768
+    even_connect.g2.common.eErrorCode errorCode = 3; //      0x13daafc - e tc=UNKNOWN
+}
+message OnboardingHeartbeat {
+    even_connect.g2.common.eErrorCode errorCode = 1; //      0x13da9bc - e tc=UNKNOWN
+}
+message OnboardingConfig {
+    eOnboardingProcessId processId = 1; //      0x13da7b4 - e tc=UNKNOWN
+    even_connect.g2.common.eErrorCode errorCode = 2; //      0x13da7f0 - e tc=UNKNOWN
+}
+message OnboardingDataPackage {
+    //  // Object contains ONEOF - I dont think this affects wire encoding: : int None = 6; //      0x13da564 - oo tc=UNKNOWN
+    eOnboardingCommandId commandId = 1; //      0x13da5a0 - e tc=UNKNOWN
+    int32 magicRandom = 2; //      0x13da5cc - a tc=32768
+    optional OnboardingConfig config = 3; //      0x13da5fc - aOM tc=UNKNOWN
+    optional OnboardingHeartbeat heartbeat = 4; //      0x13da630 - aOM tc=UNKNOWN
+    optional OnboardingEvent event = 5; //      0x13da664 - aOM tc=UNKNOWN
+}

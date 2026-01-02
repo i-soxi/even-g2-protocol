@@ -1,0 +1,32 @@
+syntax = "proto3";
+package even_connect.g2.logger;
+
+
+enum logger_Cmd_list {
+    CONNECT_HEART_PACKET = 0; // 1d54711
+    BLE_LOGGER_SWITCH_SET = 1; // 1d546f1
+    BLE_LOGGER_LEVEL_SET = 2; // 1d546d1
+    DEVICE_SEND_LOGGER_DATA = 3; // 1d546b1
+    REQUEST_FILE_NAME = 4; // 1d54691
+    DELETE_FILE_NAME = 5; // 1d54671
+    DELETE_ALL_LOGGER_FILE = 6; // 1d54651
+}
+message logger_main_msg_ctx {
+    //  // Object contains ONEOF - I dont think this affects wire encoding: : int None = 10; //      0x13d88a0 - oo tc=UNKNOWN
+    logger_Cmd_list cmd = 1; //      0x13d88dc - e tc=UNKNOWN
+    int32 magicRandom = 2; //      0x13d8908 - a tc=32768
+    int32 bleTransEn = 3; //      0x13d8934 - a tc=32768
+    optional ble_trans_level_msg levelMsg = 4; //      0x13d8968 - aOM tc=UNKNOWN
+    optional string logStr = 5; //      0x13d897c - aOS tc=UNKNOWN
+    optional request_filelist_msg requestMsg = 6; //      0x13d89b0 - aOM tc=UNKNOWN
+    optional delete_file_msg delMsg = 7; //      0x13d89e4 - aOM tc=UNKNOWN
+}
+message ble_trans_level_msg {
+    int32 bleTransLevel = 1; //      0x13d87a4 - a tc=32768
+}
+message delete_file_msg {
+    optional string fileName = 1; //      0x13d8664 - aOS tc=UNKNOWN
+}
+message request_filelist_msg {
+    repeated string fileName = 1; //      0x13d84c0 - pPS tc=UNKNOWN
+}

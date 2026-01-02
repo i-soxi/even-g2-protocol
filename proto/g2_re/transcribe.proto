@@ -1,0 +1,52 @@
+syntax = "proto3";
+package even_connect.g2.transcribe;
+
+import "common.proto";
+
+enum TranscribeCmd {
+    CMD_NONE = 0; // 1d53551
+    OPEN = 1; // 1d53531
+    CLOSE = 2; // 1d53511
+    PAUSE = 3; // 1d534f1
+    RESUME = 4; // 1d534d1
+    CONFIG = 5; // 1d534b1
+}
+enum eTranscribeCommandId {
+    NONE_COMMAND = 0; // 1d53611
+    TRANSCRIBE_CTRL = 1; // 1d535f1
+    TRANSCRIBE_RESULT = 2; // 1d535d1
+    TRANSCRIBE_NOTIFY = 161; // 1d535b1
+    COMM_RESP = 162; // 1d53591
+    TRANSCRIBE_HEARTBEAT = 255; // 1d53571
+}
+message TranscribeHeartBeat {
+    even_connect.g2.common.eErrorCode errorCode = 1; //      0x13de394 - e tc=UNKNOWN
+}
+message TranscribeResp {
+    even_connect.g2.common.eErrorCode errorCode = 1; //      0x13de2bc - e tc=UNKNOWN
+}
+message TranscribeNotify {
+    TranscribeCmd cmd = 1; //      0x13de1a8 - e tc=UNKNOWN
+    even_connect.g2.common.eErrorCode errorCode = 2; //      0x13de1e4 - e tc=UNKNOWN
+}
+message TranscribeResult {
+    bytes text = 1; //      0x13de03c - a tc=32
+    even_connect.g2.common.eErrorCode errorCode = 2; //      0x13de078 - e tc=UNKNOWN
+    int32 endFlag = 3; //      0x13de0a4 - a tc=32768
+    bytes speaker = 4; //      0x13de0d0 - a tc=32
+}
+message TranscribeControl {
+    TranscribeCmd cmd = 1; //      0x13dde1c - e tc=UNKNOWN
+    int32 noteIdx = 2; //      0x13dde48 - a tc=32768
+    even_connect.g2.common.eErrorCode errorCode = 3; //      0x13dde84 - e tc=UNKNOWN
+}
+message TranscribeDataPackage {
+    //  // Object contains ONEOF - I dont think this affects wire encoding: : int None = 10; //      0x13dd938 - oo tc=UNKNOWN
+    eTranscribeCommandId commandId = 1; //      0x13dd974 - e tc=UNKNOWN
+    int32 magicRandom = 2; //      0x13dd9a0 - a tc=32768
+    optional TranscribeControl ctrl = 3; //      0x13dd9d4 - aOM tc=UNKNOWN
+    optional TranscribeResult result = 4; //      0x13dda08 - aOM tc=UNKNOWN
+    optional TranscribeNotify notify = 5; //      0x13dda3c - aOM tc=UNKNOWN
+    optional TranscribeResp resp = 6; //      0x13dda70 - aOM tc=UNKNOWN
+    optional TranscribeHeartBeat heartbeat = 7; //      0x13ddaa4 - aOM tc=UNKNOWN
+}

@@ -1,0 +1,56 @@
+syntax = "proto3";
+package even_connect.g2.quicklist;
+
+import "common.proto";
+
+enum eQuicklistEvent {
+    NONE_EVENT = 0; // 1d53e51
+    UPDATE_DATA_UP = 1; // 1d53e31
+    UPDATE_DATA_DOWN = 2; // 1d53e11
+}
+enum eQuicklistDataType {
+    UNKNOWN_TYPE = 0; // 1d53ef1
+    FULL_UPDATE = 1; // 1d53e91
+    ADD = 2; // 1d53e71
+    MODIFY = 3; // 1d53ed1
+    DELETE = 4; // 1d53eb1
+}
+enum eQuicklistTsType {
+    DATETIME = 0; // 1d53f51
+    DATE = 1; // 1d53f31
+    TIME = 2; // 1d53f11
+}
+enum eQuicklistCommandId {
+    NONE_COMMAND = 0; // 1d53fd1
+    ITEM = 1; // 1d53fb1
+    MULT_ITEMS = 2; // 1d53f91
+    EVENT = 3; // 1d53f71
+}
+message QuicklistEvent {
+    eQuicklistEvent event = 1; //      0x13db4cc - e tc=UNKNOWN
+    int32 uid = 2; //      0x13db4f8 - a tc=32768
+    even_connect.g2.common.eErrorCode errorCode = 3; //      0x13db534 - e tc=UNKNOWN
+}
+message QuicklistMultItems {
+    eQuicklistDataType dataType = 1; //      0x13db258 - e tc=UNKNOWN
+    int32 totalCount = 2; //      0x13db284 - a tc=32768
+    repeated QuicklistItem items = 3; //      0x13db2c4 - pc tc=2097154
+    even_connect.g2.common.eErrorCode errorCode = 4; //      0x13db300 - e tc=UNKNOWN
+}
+message QuicklistItem {
+    int32 uid = 1; //      0x13daf20 - a tc=32768
+    int32 index = 2; //      0x13daf4c - a tc=32768
+    int32 isCompleted = 3; //      0x13daf78 - a tc=32768
+    fixed64 timestamp = 4; //      0x13daf8c - aInt64 tc=UNKNOWN
+    bytes title = 5; //      0x13dafb4 - a tc=32
+    even_connect.g2.common.eErrorCode errorCode = 6; //      0x13daff0 - e tc=UNKNOWN
+    eQuicklistTsType tsType = 7; //      0x13db02c - e tc=UNKNOWN
+}
+message QuicklistDataPackage {
+    //  // Object contains ONEOF - I dont think this affects wire encoding: : int None = 6; //      0x13dacdc - oo tc=UNKNOWN
+    eQuicklistCommandId commandId = 1; //      0x13dad18 - e tc=UNKNOWN
+    int32 magicRandom = 2; //      0x13dad44 - a tc=32768
+    optional QuicklistItem item = 3; //      0x13dad78 - aOM tc=UNKNOWN
+    optional QuicklistMultItems multItems = 4; //      0x13dadac - aOM tc=UNKNOWN
+    optional QuicklistEvent event = 5; //      0x13dade0 - aOM tc=UNKNOWN
+}

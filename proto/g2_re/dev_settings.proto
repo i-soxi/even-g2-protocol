@@ -1,0 +1,31 @@
+syntax = "proto3";
+package even_connect.g2.dev_settings;
+
+import "common.proto";
+
+enum eAudCmd {
+    AUD_CMD_NONE = 0; // 1d55171
+    AUD_CMD_OPEN = 1; // 1d55151
+    AUD_CMD_CLOSE = 2; // 1d55131
+    AUD_CMD_PAUSE = 3; // 1d55111
+    AUD_CMD_RESUME = 4; // 1d550f1
+}
+message AudControl {
+    eAudCmd cmd = 1; //      0x13d4858 - e tc=UNKNOWN
+    int32 status = 2; //      0x13d4884 - a tc=32768
+    even_connect.g2.common.eErrorCode result = 3; //      0x13d48c0 - e tc=UNKNOWN
+}
+message TimeSync {
+    int32 timestamp = 1; //      0x13d4718 - a tc=32768
+    int64 timezone = 2; //      0x13d4744 - a tc=2048
+    even_connect.g2.common.eErrorCode result = 3; //      0x13d4780 - e tc=UNKNOWN
+}
+message BaseConnHeartBeat {
+    even_connect.g2.common.eErrorCode result = 1; //      0x13d4650 - e tc=UNKNOWN
+}
+message QuickRestart {
+    even_connect.g2.common.eErrorCode result = 1; //      0x13d4578 - e tc=UNKNOWN
+}
+message RestoreFactory {
+    even_connect.g2.common.eErrorCode result = 1; //      0x13d44a0 - e tc=UNKNOWN
+}

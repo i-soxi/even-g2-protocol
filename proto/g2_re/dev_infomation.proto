@@ -1,0 +1,58 @@
+syntax = "proto3";
+package even_connect.g2.dev_infomation;
+
+import "common.proto";
+
+enum eDeviceConfigInfoItem {
+    ALL_INFO = 0; // 1d553d1
+    DEVICE_BRIGHTNESS = 1; // 1d553b1
+    DEVICE_ANTI_SHAKE_ENABLE = 2; // 1d55391
+    DEVICE_DISPLAY_MODE = 3; // 1d55371
+    DEVICE_WORK_MODE = 4; // 1d55351
+    DEVICE_WAKEUP_ANGLE = 5; // 1d55331
+    DEVICE_GLASSES_SN = 6; // 1d55311
+    DEVICE_DEVICE_SN = 7; // 1d552f1
+    DEVICE_BLE_MAC = 8; // 1d552d1
+}
+enum eSwitchState {
+    CLOSE = 0; // 1d55411
+    OPEN = 1; // 1d553f1
+}
+message BleMac {
+    bytes mac = 1; //      0x13d3904 - a tc=32
+    even_connect.g2.common.eErrorCode result = 2; //      0x13d3940 - e tc=UNKNOWN
+}
+message HeadAngle {
+    int32 angle = 1; //      0x13d37d4 - a tc=32768
+    int32 offset = 2; //      0x13d3800 - a tc=32768
+    even_connect.g2.common.eErrorCode result = 3; //      0x13d383c - e tc=UNKNOWN
+}
+message SnInfo {
+    bytes snId = 1; //      0x13d36d0 - a tc=32
+    even_connect.g2.common.eErrorCode result = 2; //      0x13d370c - e tc=UNKNOWN
+}
+message Mode {
+    int32 mode = 1; //      0x13d35cc - a tc=32768
+    even_connect.g2.common.eErrorCode result = 2; //      0x13d3608 - e tc=UNKNOWN
+}
+message ALSInfo {
+    int32 brightness = 1; //      0x13d3490 - a tc=32768
+    eSwitchState autoOC = 2; //      0x13d34cc - e tc=UNKNOWN
+    even_connect.g2.common.eErrorCode result = 3; //      0x13d3508 - e tc=UNKNOWN
+}
+message DeviceInfoValue {
+    //  // Object contains ONEOF - I dont think this affects wire encoding: : int None = 16; //      0x13d2da4 - oo tc=UNKNOWN
+    eDeviceConfigInfoItem cfgInfoItem = 1; //      0x13d2de0 - e tc=UNKNOWN
+    optional ALSInfo alsState = 2; //      0x13d2e14 - aOM tc=UNKNOWN
+    eSwitchState antiShakeEnable = 3; //      0x13d2e50 - e tc=UNKNOWN
+    optional Mode displayMode = 4; //      0x13d2e84 - aOM tc=UNKNOWN
+    optional Mode wakeMode = 5; //      0x13d2eb8 - aOM tc=UNKNOWN
+    optional HeadAngle wakeupAngle = 6; //      0x13d2eec - aOM tc=UNKNOWN
+    optional SnInfo glassesSN = 7; //      0x13d2f20 - aOM tc=UNKNOWN
+    optional SnInfo deviceSN = 8; //      0x13d2f54 - aOM tc=UNKNOWN
+    optional BleMac bleMac = 9; //      0x13d2f88 - aOM tc=UNKNOWN
+}
+message DeviceInfo {
+    repeated DeviceInfoValue infoValue = 1; //      0x13d2bdc - pc tc=2097154
+    even_connect.g2.common.eErrorCode result = 2; //      0x13d2c18 - e tc=UNKNOWN
+}

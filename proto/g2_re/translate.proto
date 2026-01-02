@@ -1,0 +1,57 @@
+syntax = "proto3";
+package even_connect.g2.translate;
+
+import "common.proto";
+
+enum TranslateCmd {
+    CMD_NONE = 0; // 1d533b1
+    OPEN = 1; // 1d53351
+    CLOSE = 2; // 1d53371
+    PAUSE = 3; // 1d53391
+    RESUME = 4; // 1d53331
+}
+enum eTranslateCommandId {
+    NONE_COMMAND = 0; // 1d53491
+    TRANSLATE_CTRL = 1; // 1d53471
+    TRANSLATE_RESULT = 2; // 1d53451
+    TRANSLATE_NOTIFY = 161; // 1d53431
+    COMM_RESP = 162; // 1d53411
+    TRANSLATE_MODE_SWITCH = 163; // 1d533f1
+    TRANSLATE_HEARTBEAT = 255; // 1d533d1
+}
+message TranslateHeartBeat {
+}
+message TranslateResult {
+    bytes srcText = 1; //      0x13ded78 - a tc=32
+    bytes dstText = 2; //      0x13deda4 - a tc=32
+    even_connect.g2.common.eErrorCode errorCode = 3; //      0x13dede0 - e tc=UNKNOWN
+    int32 endFlag = 4; //      0x13dee0c - a tc=32768
+    bytes speaker = 5; //      0x13dee38 - a tc=32
+}
+message TranslateControl {
+    TranslateCmd cmd = 1; //      0x13dec1c - e tc=UNKNOWN
+    bytes languagePair = 2; //      0x13dec48 - a tc=32
+    int32 useAudio = 3; //      0x13dec74 - a tc=32768
+    even_connect.g2.common.eErrorCode errorCode = 4; //      0x13decb0 - e tc=UNKNOWN
+}
+message TranslateResp {
+    even_connect.g2.common.eErrorCode errorCode = 1; //      0x13deb44 - e tc=UNKNOWN
+}
+message TranslateModeSwitch {
+    int32 mode = 1; //      0x13dea6c - a tc=32768
+}
+message TranslateNotify {
+    TranslateCmd cmd = 1; //      0x13de878 - e tc=UNKNOWN
+    even_connect.g2.common.eErrorCode errorCode = 2; //      0x13de8b4 - e tc=UNKNOWN
+}
+message TranslateDataPackage {
+    //  // Object contains ONEOF - I dont think this affects wire encoding: : int None = 12; //      0x13de498 - oo tc=UNKNOWN
+    eTranslateCommandId commandId = 1; //      0x13de4d4 - e tc=UNKNOWN
+    int32 magicRandom = 2; //      0x13de500 - a tc=32768
+    optional TranslateControl ctrl = 3; //      0x13de534 - aOM tc=UNKNOWN
+    optional TranslateResult result = 4; //      0x13de568 - aOM tc=UNKNOWN
+    optional TranslateNotify notify = 5; //      0x13de59c - aOM tc=UNKNOWN
+    optional TranslateModeSwitch modeSwitch = 6; //      0x13de5d0 - aOM tc=UNKNOWN
+    optional TranslateResp resp = 7; //      0x13de604 - aOM tc=UNKNOWN
+    optional TranslateHeartBeat heartbeat = 8; //      0x13de638 - aOM tc=UNKNOWN
+}

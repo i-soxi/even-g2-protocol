@@ -1,0 +1,21 @@
+syntax = "proto3";
+package even_connect.g2.common;
+
+
+enum eErrorCode {
+    SUCCESS = 0; // 1d55ff1
+    CRC = 1; // 1d561b1
+    PKT_LOST = 2; // 1d56191
+    TIMEOUT = 3; // 1d56171
+    NO_RESOURCES = 4; // 1d56151
+    PB_ERROR = 5; // 1d56131
+    NULL = 6; // 1d56111
+    FAIL = 7; // 1d56011
+    NOT_SUPPORT = 8; // 1d56031
+    SUPPORT = 9; // 1d560f1
+    HEAD_ID = 10; // 1d560d1
+    INVALID_LENGTH = 11; // 1d560b1
+    INVALID_SDID = 12; // 1d56091
+    DUPLICATE_PACKET = 13; // 1d56071
+    RING_CONNECT_TIMEOUT = 90; // 1d56051
+}

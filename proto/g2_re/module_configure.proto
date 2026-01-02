@@ -1,0 +1,22 @@
+syntax = "proto3";
+package even_connect.g2.module_configure;
+
+
+enum module_configure_Cmd_list {
+    SYSTEM_GENERAL_SETTING_PACKET = 0; // 1d54631
+    APP_INQUIRE_DASHBOARD_AUTO_CLOSE_VALUE = 1; // 1d54611
+    APP_SET_DASHBOARD_AUTO_CLOSE_VALUE = 2; // 1d545f1
+}
+message module_configure_main_msg_ctx {
+    //  // Object contains ONEOF - I dont think this affects wire encoding: : int None = 4; //      0x13d8c58 - oo tc=UNKNOWN
+    module_configure_Cmd_list cmd = 1; //      0x13d8c94 - e tc=UNKNOWN
+    int32 magicRandom = 2; //      0x13d8cc0 - a tc=32768
+    optional send_system_general_setting SysGeneralSetting = 3; //      0x13d8cf4 - aOM tc=UNKNOWN
+    optional dashboard_general_setting DashboardGeneralSetting = 4; //      0x13d8d28 - aOM tc=UNKNOWN
+}
+message dashboard_general_setting {
+    int32 autoCloseValue = 1; //      0x13d8b74 - a tc=32768
+}
+message send_system_general_setting {
+    int32 languageIndex = 1; //      0x13d8aac - a tc=32768
+}

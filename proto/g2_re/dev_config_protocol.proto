@@ -1,0 +1,52 @@
+syntax = "proto3";
+package even_connect.g2.dev_config_protocol;
+
+import "dev_settings.proto";
+import "dev_pair_manager.proto";
+import "common.proto";
+import "dev_infomation.proto";
+
+enum eDevCfgCommandId {
+    NONE_COMMAND = 0; // 1d55671
+    CONNECT_PRO = 1; // 1d55651
+    SERVICE_PRO = 2; // 1d55631
+    COMMAND_PRO = 3; // 1d55611
+    AUTHENTICATION = 4; // 1d555f1
+    PIPE_ROLE_CHANGE = 5; // 1d555d1
+    RING_CONNECT_INFO = 6; // 1d555b1
+    BLE_CONNECT_PARAM = 7; // 1d55591
+    DISCONNECT_INFO = 8; // 1d55571
+    UNPAIR_INFO = 9; // 1d55551
+    COMMAND_EXCEPTION = 10; // 1d55531
+    SET_DEVICE_INFO = 11; // 1d55511
+    GET_DEVICE_INFO = 12; // 1d554f1
+    RESTORE_TO_FACTORY_SETTINGS = 13; // 1d554d1
+    BASE_CONNECT_HEART_BEAT = 14; // 1d554b1
+    QUICK_RESTART = 15; // 1d55491
+    TIME_SYNC = 128; // 1d55471
+    AUD_CONTROL = 129; // 1d55451
+    COMMAND_ERROR = 255; // 1d55431
+}
+message DevCfgCmdException {
+    eDevCfgCommandId commandId = 1; //      0x13d29d0 - e tc=UNKNOWN
+    even_connect.g2.common.eErrorCode result = 2; //      0x13d2a0c - e tc=UNKNOWN
+}
+message DevCfgDataPackage {
+    //  // Object contains ONEOF - I dont think this affects wire encoding: : int None = 28; //      0x13d21f8 - oo tc=UNKNOWN
+    eDevCfgCommandId commandId = 1; //      0x13d2234 - e tc=UNKNOWN
+    int32 magicRandom = 2; //      0x13d2260 - a tc=32768
+    optional even_connect.g2.dev_pair_manager.AuthMgr authMgr = 3; //      0x13d2294 - aOM tc=UNKNOWN
+    optional even_connect.g2.dev_pair_manager.PipeRoleChange roleChange = 4; //      0x13d22c8 - aOM tc=UNKNOWN
+    optional even_connect.g2.dev_pair_manager.RingInfo ringInfo = 5; //      0x13d22fc - aOM tc=UNKNOWN
+    optional even_connect.g2.dev_pair_manager.BleConnectParam connParam = 6; //      0x13d2330 - aOM tc=UNKNOWN
+    optional even_connect.g2.dev_pair_manager.DisconnectInfo disconnectInfo = 7; //      0x13d2364 - aOM tc=UNKNOWN
+    optional even_connect.g2.dev_pair_manager.UnpairInfo unpairInfo = 8; //      0x13d2398 - aOM tc=UNKNOWN
+    optional DevCfgCmdException commandException = 9; //      0x13d23cc - aOM tc=UNKNOWN
+    optional even_connect.g2.dev_infomation.DeviceInfo setDeviceInfo = 10; //      0x13d2400 - aOM tc=UNKNOWN
+    optional even_connect.g2.dev_infomation.DeviceInfo getDeviceInfo = 11; //      0x13d2434 - aOM tc=UNKNOWN
+    optional even_connect.g2.dev_settings.RestoreFactory restoreFactory = 12; //      0x13d2468 - aOM tc=UNKNOWN
+    optional even_connect.g2.dev_settings.BaseConnHeartBeat baseHeartBeat = 13; //      0x13d249c - aOM tc=UNKNOWN
+    optional even_connect.g2.dev_settings.QuickRestart quickRestart = 14; //      0x13d24d0 - aOM tc=UNKNOWN
+    optional even_connect.g2.dev_settings.TimeSync timeSync = 128; //      0x13d2504 - aOM tc=UNKNOWN
+    optional even_connect.g2.dev_settings.AudControl AudControl = 129; //      0x13d2538 - aOM tc=UNKNOWN
+}

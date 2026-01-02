@@ -1,0 +1,90 @@
+syntax = "proto3";
+package even_connect.g2.g2_setting;
+
+
+enum APPRequestSettingType {
+    APP_REQUIRE_BRIGHTNESS_INFO = 0; // 1d54971
+    APP_REQUIRE_BASIC_SETTING = 1; // 1d54951
+}
+enum g2_settingCommandId {
+    NONE_COMMAND = 0; // 1d549f1
+    DeviceReceiveInfo = 1; // 1d549d1
+    DeviceReceiveRequest = 2; // 1d549b1
+    DeviceSendToAPP = 3; // 1d54991
+}
+message DeviceReceiveRequestFromAPP {
+    APPRequestSettingType settingInfoType = 1; //      0x13d73c0 - e tc=UNKNOWN
+    int32 autoBrightnessLevel = 2; //      0x13d73ec - a tc=32768
+    int32 yCoordinateLevelRestored = 3; //      0x13d7418 - a tc=32768
+    int32 xCoordinateLevelRestored = 4; //      0x13d7444 - a tc=32768
+    optional string leftSoftwareVersion = 5; //      0x13d7458 - aOS tc=UNKNOWN
+    optional string rightSoftwareVersion = 6; //      0x13d746c - aOS tc=UNKNOWN
+    int32 headUpSwitchRestored = 7; //      0x13d7498 - a tc=32768
+    int32 headUpAngleRestored = 8; //      0x13d74c4 - a tc=32768
+    int32 headUpAngleCalibrationRestored = 9; //      0x13d74f0 - a tc=32768
+    int32 wearDetectionSwitchRestored = 10; //      0x13d751c - a tc=32768
+    int32 deviceRunningStatus = 11; //      0x13d7548 - a tc=32768
+    int32 battery = 12; //      0x13d7574 - a tc=32768
+    int32 chargingStatus = 13; //      0x13d75a0 - a tc=32768
+    int32 silentModeSwitchRestored = 14; //      0x13d75cc - a tc=32768
+    int32 leftCalibrationRestored = 15; //      0x13d75f8 - a tc=32768
+    int32 rightCalibrationRestored = 16; //      0x13d7624 - a tc=32768
+    int32 headUpRecalibrationSuccess = 17; //      0x13d7650 - a tc=32768
+    int32 autoBrightnessSwitchRestored = 18; //      0x13d767c - a tc=32768
+    int32 unreadMessageCount = 19; //      0x13d76a8 - a tc=32768
+}
+message DeviceReceiveInfoFromAPP {
+    //  // Object contains ONEOF - I dont think this affects wire encoding: : int None = 16; //      0x13d7148 - oo tc=UNKNOWN
+    optional DeviceReceive_Brightness deviceReceiveBrightness = 1; //      0x13d717c - aOM tc=UNKNOWN
+    optional DeviceReceive_Y_Coordinate deviceReceiveYCoordinate = 2; //      0x13d71b0 - aOM tc=UNKNOWN
+    optional DeviceReceive_X_Coordinate deviceReceiveXCoordinate = 3; //      0x13d71e4 - aOM tc=UNKNOWN
+    optional DeviceReceive_Head_UP_Setting deviceReceiveHeadUpSetting = 4; //      0x13d7218 - aOM tc=UNKNOWN
+    optional Wear_Detection_Setting deviceReceiveWearDetection = 5; //      0x13d724c - aOM tc=UNKNOWN
+    optional DeviceReceive_Silent_Mode_Setting deviceReceiveSilentMode = 6; //      0x13d7280 - aOM tc=UNKNOWN
+    optional DeviceReceive_APP_PAGE deviceReceiveAppPage = 7; //      0x13d72b4 - aOM tc=UNKNOWN
+    optional DeviceReceive_Advanced_Setting deviceReceiveAdvancedSetting = 8; //      0x13d72e8 - aOM tc=UNKNOWN
+}
+message DeviceReceive_Advanced_Setting {
+    int32 killAllFeature = 1; //      0x13d6fbc - a tc=32768
+}
+message DeviceReceive_APP_PAGE {
+    int32 appPage = 1; //      0x13d6e7c - a tc=32768
+}
+message DeviceReceive_Silent_Mode_Setting {
+    int32 silentModeSwitch = 1; //      0x13d6db4 - a tc=32768
+}
+message Wear_Detection_Setting {
+    int32 wearDetectionSwitch = 1; //      0x13d6cec - a tc=32768
+}
+message DeviceReceive_Head_UP_Setting {
+    //  // Object contains ONEOF - I dont think this affects wire encoding: : int None = 8; //      0x13d6b74 - oo tc=UNKNOWN
+    int32 headUpSwitch = 1; //      0x13d6ba0 - a tc=32768
+    int32 headUpAngle = 2; //      0x13d6bcc - a tc=32768
+    int32 headUpCalibrationSwitch = 3; //      0x13d6bf8 - a tc=32768
+    int32 headUpCalibration = 4; //      0x13d6c24 - a tc=32768
+}
+message DeviceReceive_X_Coordinate {
+    int32 xCoordinateLevel = 1; //      0x13d6a80 - a tc=32768
+}
+message DeviceReceive_Y_Coordinate {
+    int32 yCoordinateLevel = 1; //      0x13d69b8 - a tc=32768
+}
+message DeviceReceive_Brightness {
+    //  // Object contains ONEOF - I dont think this affects wire encoding: : int None = 8; //      0x13d6840 - oo tc=UNKNOWN
+    int32 autoAdjust = 1; //      0x13d686c - a tc=32768
+    int32 brightnessLevel = 2; //      0x13d6898 - a tc=32768
+    int32 leftCalibration = 3; //      0x13d68c4 - a tc=32768
+    int32 rightCalibration = 4; //      0x13d68f0 - a tc=32768
+}
+message DeviceSendInfoToAPP {
+    //  // Object contains ONEOF - I dont think this affects wire encoding: : int None = 2; //      0x13d6720 - oo tc=UNKNOWN
+    int32 currentRecalibrationStatus = 1; //      0x13d674c - a tc=32768
+}
+message G2SettingPackage {
+    //  // Object contains ONEOF - I dont think this affects wire encoding: : int None = 6; //      0x13d64c8 - oo tc=UNKNOWN
+    g2_settingCommandId commandId = 1; //      0x13d6504 - e tc=UNKNOWN
+    int32 magicRandom = 2; //      0x13d6530 - a tc=32768
+    optional DeviceReceiveInfoFromAPP deviceReceiveInfoFromApp = 3; //      0x13d6564 - aOM tc=UNKNOWN
+    optional DeviceReceiveRequestFromAPP deviceReceiveRequestFromApp = 4; //      0x13d6598 - aOM tc=UNKNOWN
+    optional DeviceSendInfoToAPP deviceSendInfoToApp = 5; //      0x13d65cc - aOM tc=UNKNOWN
+}

@@ -1,0 +1,54 @@
+syntax = "proto3";
+package even_connect.g2.dev_pair_manager;
+
+import "common.proto";
+
+enum eDevice {
+    RING = 0; // 1d551b1
+    GLASSES = 1; // 1d55211
+    RING_GLASSES = 2; // 1d55191
+    PHONE_IOS = 3; // 1d551f1
+    PHONE_ANDROID = 4; // 1d551d1
+}
+enum eGlassesLR {
+    BOTH = 0; // 1d55271
+    RIGHT = 1; // 1d55251
+    LEFT = 2; // 1d55231
+}
+enum eConnParamState {
+    SLOW = 0; // 1d552b1
+    FAST = 1; // 1d55291
+}
+message UnpairInfo {
+    eDevice dev = 1; //      0x13d4360 - e tc=UNKNOWN
+    bytes ringMac = 2; //      0x13d438c - a tc=32
+    even_connect.g2.common.eErrorCode result = 3; //      0x13d43c8 - e tc=UNKNOWN
+}
+message DisconnectInfo {
+    eDevice dev = 1; //      0x13d4220 - e tc=UNKNOWN
+    bytes ringMac = 2; //      0x13d424c - a tc=32
+    even_connect.g2.common.eErrorCode result = 3; //      0x13d4288 - e tc=UNKNOWN
+}
+message PipeRoleChange {
+    eGlassesLR asCmdRole = 1; //      0x13d4018 - e tc=UNKNOWN
+    even_connect.g2.common.eErrorCode result = 2; //      0x13d4054 - e tc=UNKNOWN
+}
+message BleConnectParam {
+    int32 MTU = 1; //      0x13d3d94 - a tc=32768
+    int32 connInterval = 2; //      0x13d3dc0 - a tc=32768
+    eConnParamState setSpeed = 3; //      0x13d3dfc - e tc=UNKNOWN
+    optional bool setSpeedRet = 4; //      0x13d3e10 - aOB tc=UNKNOWN
+    even_connect.g2.common.eErrorCode result = 5; //      0x13d3e4c - e tc=UNKNOWN
+}
+message RingInfo {
+    optional bool connectRing = 1; //      0x13d3c0c - aOB tc=UNKNOWN
+    bytes ringMac = 2; //      0x13d3c38 - a tc=32
+    bytes ringName = 3; //      0x13d3c64 - a tc=32
+    int32 connRet = 4; //      0x13d3c90 - a tc=32768
+    even_connect.g2.common.eErrorCode result = 5; //      0x13d3ccc - e tc=UNKNOWN
+}
+message AuthMgr {
+    optional bool secAuth = 1; //      0x13d39f0 - aOB tc=UNKNOWN
+    eDevice phoneType = 2; //      0x13d3a2c - e tc=UNKNOWN
+    even_connect.g2.common.eErrorCode result = 3; //      0x13d3a68 - e tc=UNKNOWN
+}

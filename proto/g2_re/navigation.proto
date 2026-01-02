@@ -1,0 +1,87 @@
+syntax = "proto3";
+package even_connect.g2.navigation;
+
+import "common.proto";
+
+enum Navigation_Cmd_list {
+    APP_SEND_HEARTBEAT_CMD = 0; // 1d545d1
+    OS_NOTIFY_MENU_STARTUP_REQUEST_LOCATION_LIST = 1; // 1d545b1
+    APP_RESPONSE_LOCATION_LIST = 2; // 1d54591
+    APP_RESPONSE_LOCATION_NONE = 3; // 1d54571
+    OS_NOTIFY_LOCATION_SELECTED = 4; // 1d54551
+    APP_REQUEST_START_UP = 5; // 1d54531
+    APP_SEND_ERROR_INFO_MSG = 6; // 1d54511
+    APP_SEND_BASIC_INFO = 7; // 1d544f1
+    APP_SNED_MINI_MAP_FILE = 8; // 1d544d1
+    APP_SEND_MAX_MAP_FILE = 9; // 1d544b1
+    APP_REQUEST_RECALCULATING_LOCATION_START = 10; // 1d54491
+    APP_REQUEST_NAVIGATION_COMPLETE = 11; // 1d54471
+    APP_REQUEST_EXIT = 12; // 1d54451
+    OS_NOTIFY_EXIT = 13; // 1d54431
+    OS_NOTIFY_REVIEW_CHANGED = 14; // 1d54411
+    OS_NOTIFY_COMPASS_CHANGED = 15; // 1d543f1
+}
+message navigation_main_msg_ctx {
+    //  // Object contains ONEOF - I dont think this affects wire encoding: : int None = 16; //      0x13d9a10 - oo tc=UNKNOWN
+    Navigation_Cmd_list cmd = 1; //      0x13d9a4c - e tc=UNKNOWN
+    int32 magicRandom = 2; //      0x13d9a78 - a tc=32768
+    optional extend_info_msg extMsg = 3; //      0x13d9aac - aOM tc=UNKNOWN
+    optional LocationList_msg list = 4; //      0x13d9ae0 - aOM tc=UNKNOWN
+    optional basic_info_msg info = 5; //      0x13d9b10 - aOM tc=UNKNOWN
+    optional mini_map_msg miniMapData = 6; //      0x13d9b44 - aOM tc=UNKNOWN
+    optional max_map_msg maxMapData = 7; //      0x13d9b78 - aOM tc=UNKNOWN
+    optional os_select_location_msg selectIndex = 8; //      0x13d9bac - aOM tc=UNKNOWN
+    optional view_info_msg viewMsg = 9; //      0x13d9be0 - aOM tc=UNKNOWN
+    optional compass_info_msg compassMsg = 10; //      0x13d9c14 - aOM tc=UNKNOWN
+}
+message compass_info_msg {
+    int32 compassIndex = 1; //      0x13d9884 - a tc=32768
+}
+message view_info_msg {
+    int32 viewIndex = 1; //      0x13d9744 - a tc=32768
+}
+message extend_info_msg {
+    even_connect.g2.common.eErrorCode errorCode = 1; //      0x13d963c - e tc=UNKNOWN
+    optional string errorMessage = 2; //      0x13d9650 - aOS tc=UNKNOWN
+    int32 errorIndex = 3; //      0x13d967c - a tc=32768
+}
+message max_map_msg {
+    int32 mapSessionId = 1; //      0x13d944c - a tc=32768
+    int32 mapTotalSize = 2; //      0x13d9478 - a tc=32768
+    int32 compressMode = 3; //      0x13d94a4 - a tc=32768
+    int32 mapFragmentIndex = 4; //      0x13d94d0 - a tc=32768
+    int32 mapFragmentPacketSize = 5; //      0x13d94fc - a tc=32768
+    bytes mapRawData = 6; //      0x13d9528 - a tc=32
+    even_connect.g2.common.eErrorCode errorCode = 7; //      0x13d9564 - e tc=UNKNOWN
+}
+message mini_map_msg {
+    int32 mapSize = 1; //      0x13d9298 - a tc=32768
+    int32 compressMode = 2; //      0x13d92c4 - a tc=32768
+    bytes mapRawData = 3; //      0x13d92f0 - a tc=32
+    even_connect.g2.common.eErrorCode errorCode = 4; //      0x13d932c - e tc=UNKNOWN
+    int32 rotationAngle = 5; //      0x13d9358 - a tc=32768
+    int32 miniMapBorderEn = 6; //      0x13d9384 - a tc=32768
+}
+message basic_info_msg {
+    int32 directionSignIndex = 1; //      0x13d90f0 - a tc=32768
+    optional string distance = 2; //      0x13d9104 - aOS tc=UNKNOWN
+    optional string roadName = 3; //      0x13d9118 - aOS tc=UNKNOWN
+    optional string spendTime = 4; //      0x13d912c - aOS tc=UNKNOWN
+    optional string remainDistance = 5; //      0x13d9140 - aOS tc=UNKNOWN
+    optional string etaTime = 6; //      0x13d9154 - aOS tc=UNKNOWN
+    optional string speed = 7; //      0x13d9168 - aOS tc=UNKNOWN
+    int32 navigateWorkMethod = 8; //      0x13d9194 - a tc=32768
+    even_connect.g2.common.eErrorCode errorCode = 9; //      0x13d91d0 - e tc=UNKNOWN
+}
+message os_select_location_msg {
+    optional string locationName = 1; //      0x13d8f1c - aOS tc=UNKNOWN
+    even_connect.g2.common.eErrorCode errorCode = 2; //      0x13d8f58 - e tc=UNKNOWN
+    int32 locationIndex = 3; //      0x13d8f84 - a tc=32768
+    int32 navigateMethod = 4; //      0x13d8fb0 - a tc=32768
+}
+message LocationList_msg {
+    int32 listNum = 1; //      0x13d8df0 - a tc=32768
+    repeated string locationName = 2; //      0x13d8e04 - pPS tc=UNKNOWN
+    repeated int32 locationIconIndex = 3; //      0x13d8e30 - p tc=32774
+    even_connect.g2.common.eErrorCode errorCode = 4; //      0x13d8e6c - e tc=UNKNOWN
+}

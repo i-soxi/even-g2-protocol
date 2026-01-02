@@ -1,0 +1,55 @@
+syntax = "proto3";
+package even_connect.g2.health;
+
+import "common.proto";
+
+enum eHealthDataType {
+    UNKNOWN_TYPE = 0; // 1d54811
+    ALL = 1; // 1d54731
+    STEPS = 2; // 1d547d1
+    CALORIES = 3; // 1d547b1
+    SLEEP = 4; // 1d54791
+    HEART_RATE = 5; // 1d54771
+    BLOOD_OXYGEN = 6; // 1d54751
+    TEMPERATURE = 7; // 1d547f1
+    HRV = 8; // 1d54851
+    PRODUCTIVITY = 9; // 1d54831
+}
+enum eHealthCommandId {
+    NONE_COMMAND = 0; // 1d548f1
+    SINGLE_DATA = 1; // 1d548d1
+    MULT_DATA = 2; // 1d548b1
+    SINGLE_HIGHLIGHT = 3; // 1d54891
+    MULT_HIGHLIGHT = 4; // 1d54871
+}
+message HealthMultHighlight {
+    repeated HealthSingleHighlight Highlight = 1; //      0x13d83d4 - pc tc=2097154
+    even_connect.g2.common.eErrorCode errorCode = 2; //      0x13d8410 - e tc=UNKNOWN
+}
+message HealthSingleHighlight {
+    eHealthDataType dataType = 1; //      0x13d8294 - e tc=UNKNOWN
+    bytes text = 2; //      0x13d82bc - a tc=32
+    even_connect.g2.common.eErrorCode errorCode = 3; //      0x13d82f8 - e tc=UNKNOWN
+}
+message HealthMultData {
+    eHealthDataType dataType = 1; //      0x13d8140 - e tc=UNKNOWN
+    repeated HealthSingleData dataSet = 2; //      0x13d8180 - pc tc=2097154
+    even_connect.g2.common.eErrorCode errorCode = 3; //      0x13d81bc - e tc=UNKNOWN
+}
+message HealthSingleData {
+    eHealthDataType dataType = 1; //      0x13d7e90 - e tc=UNKNOWN
+    int32 goal = 2; //      0x13d7ebc - a tc=32768
+    float value = 3; //      0x13d7ee4 - a tc=256
+    float avgValue = 4; //      0x13d7f10 - a tc=256
+    int32 duration = 5; //      0x13d7f38 - a tc=32768
+    even_connect.g2.common.eErrorCode errorCode = 6; //      0x13d7f74 - e tc=UNKNOWN
+}
+message HealthDataPackage {
+    //  // Object contains ONEOF - I dont think this affects wire encoding: : int None = 8; //      0x13d7b90 - oo tc=UNKNOWN
+    eHealthCommandId commandId = 1; //      0x13d7bcc - e tc=UNKNOWN
+    int32 magicRandom = 2; //      0x13d7bf8 - a tc=32768
+    optional HealthSingleData singleData = 3; //      0x13d7c2c - aOM tc=UNKNOWN
+    optional HealthMultData multData = 4; //      0x13d7c60 - aOM tc=UNKNOWN
+    optional HealthSingleHighlight singleHighlight = 5; //      0x13d7c94 - aOM tc=UNKNOWN
+    optional HealthMultHighlight multHighlight = 6; //      0x13d7cc8 - aOM tc=UNKNOWN
+}

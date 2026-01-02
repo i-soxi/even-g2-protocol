@@ -1,0 +1,46 @@
+syntax = "proto3";
+package even_connect.g2.ring;
+
+import "common.proto";
+
+enum eRingEvent {
+    UNKNOWN_EVENT = 0; // 1d53d91
+    BLE_ADV = 1; // 1d53d71
+}
+enum eRingCommandId {
+    NONE_COMMAND = 0; // 1d53df1
+    EVENT = 1; // 1d53dd1
+    RAW_DATA = 2; // 1d53db1
+}
+message RingRawData {
+    int32 battery = 1; //      0x13dbb7c - a tc=32768
+    int32 chargeStates = 2; //      0x13dbba8 - a tc=32768
+    int32 hr = 3; //      0x13dbbd4 - a tc=32768
+    int32 hrTimestamp = 4; //      0x13dbc00 - a tc=32768
+    int32 spo2 = 5; //      0x13dbc2c - a tc=32768
+    int32 spo2Timestamp = 6; //      0x13dbc58 - a tc=32768
+    int32 hrv = 7; //      0x13dbc84 - a tc=32768
+    int32 hrvTimestamp = 8; //      0x13dbcb0 - a tc=32768
+    int32 temp = 9; //      0x13dbcdc - a tc=32768
+    int32 tempTimestamp = 10; //      0x13dbd08 - a tc=32768
+    int32 actKcal = 11; //      0x13dbd34 - a tc=32768
+    int32 actKcalTimestamp = 12; //      0x13dbd60 - a tc=32768
+    int32 allKcal = 13; //      0x13dbd8c - a tc=32768
+    int32 allKcalTimestamp = 14; //      0x13dbdb8 - a tc=32768
+    int32 steps = 15; //      0x13dbde4 - a tc=32768
+    int32 stepsTimestamp = 16; //      0x13dbe10 - a tc=32768
+    even_connect.g2.common.eErrorCode errorCode = 17; //      0x13dbe4c - e tc=UNKNOWN
+}
+message RingEvent {
+    bytes ringMac = 1; //      0x13db91c - a tc=32
+    eRingEvent eventId = 2; //      0x13db958 - e tc=UNKNOWN
+    int32 eventParam = 3; //      0x13db984 - a tc=32768
+    even_connect.g2.common.eErrorCode errorCode = 4; //      0x13db9c0 - e tc=UNKNOWN
+}
+message RingDataPackage {
+    //  // Object contains ONEOF - I dont think this affects wire encoding: : int None = 4; //      0x13db70c - oo tc=UNKNOWN
+    eRingCommandId commandId = 1; //      0x13db748 - e tc=UNKNOWN
+    int32 magicRandom = 2; //      0x13db774 - a tc=32768
+    optional RingEvent event = 3; //      0x13db7a8 - aOM tc=UNKNOWN
+    optional RingRawData rawData = 4; //      0x13db7dc - aOM tc=UNKNOWN
+}

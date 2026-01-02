@@ -1,0 +1,254 @@
+syntax = "proto3";
+package even_connect.g2.dashboard;
+
+
+enum PageWidgetType {
+    PAGE_WIDGET_UNKNOWN = 0; // 1d55731
+    PAGE_WIDGET_NEWS = 1; // 1d55711
+    PAGE_WIDGET_STOCK = 2; // 1d556d1
+    PAGE_WIDGET_SCHEDULE = 3; // 1d556f1
+    PAGE_WIDGET_QUICKLIST = 4; // 1d55691
+    PAGE_WIDGET_HEALTH = 5; // 1d556b1
+}
+enum PageType {
+    PAGE_TYPE_UNKNOWN = 0; // 1d55811
+    PAGE_TYPE_DASHBOARD_MAIN = 1; // 1d557f1
+    PAGE_TYPE_NEWS_EXPANDED = 2; // 1d557d1
+    PAGE_TYPE_STOCK_EXPANDED = 3; // 1d55791
+    PAGE_TYPE_CALENDAR_EXPANDED = 4; // 1d557b1
+    PAGE_TYPE_QUICKLIST_EXPANDED = 5; // 1d55751
+    PAGE_TYPE_HEALTH_EXPANDED = 6; // 1d55771
+}
+enum AppReceiveFLAG {
+    APP_RECEIVED_SUCCESS = 0; // 1d55851
+    APP_PARAMETER_ERROR = 1; // 1d55831
+}
+enum DashboardReceiveFLAG {
+    DASHBOARD_RECEIVED_SUCCESS = 0; // 1d55891
+    DASHBOARD_PARAMETER_ERROR = 1; // 1d55871
+}
+enum WidgetType {
+    WIDGET_UNKNOWN = 0; // 1d55951
+    WIDGET_NEWS = 1; // 1d558f1
+    WIDGET_STOCK = 2; // 1d558b1
+    WIDGET_SCHEDULE = 3; // 1d558d1
+    WIDGET_QUICKLIST = 4; // 1d55931
+    WIDGET_HEALTH = 5; // 1d55911
+}
+enum StatusType {
+    STATUS_UNKNOWN = 0; // 1d559f1
+    STATUS_WEATHER = 1; // 1d559b1
+    STATUS_MESSAGE = 2; // 1d55991
+    STATUS_Power = 3; // 1d55971
+    STATUS_HEALTH = 4; // 1d559d1
+}
+enum WeatherType {
+    WEATHER_UNKNOWN = 0; // 1d55c11
+    WEATHER_SUNNY = 1; // 1d55bf1
+    WEATHER_CLOUDS = 2; // 1d55bd1
+    WEATHER_DRIZZLE = 3; // 1d55bb1
+    WEATHER_HEAVY_DRIZZLE = 4; // 1d55b91
+    WEATHER_RAIN = 5; // 1d55b71
+    WEATHER_HEAVY_RAIN = 6; // 1d55b51
+    WEATHER_THUNDERSTORM = 7; // 1d55b31
+    WEATHER_THUNDER = 8; // 1d55b11
+    WEATHER_SNOW = 9; // 1d55af1
+    WEATHER_MIST = 10; // 1d55ad1
+    WEATHER_FOG = 11; // 1d55ab1
+    WEATHER_DUST = 12; // 1d55a91
+    WEATHER_SQUAILS = 13; // 1d55a71
+    WEATHER_TORNADO = 14; // 1d55a51
+    WEATHER_FREEZING_RAIN = 15; // 1d55a31
+    WEATHER_NIGHT = 16; // 1d55a11
+}
+enum TemperatureUnit {
+    TEMP_UNIT_UNKNOWN = 0; // 1d55c71
+    TEMP_UNIT_CELSIUS = 1; // 1d55c51
+    TEMP_UNIT_FAHRENHEIT = 2; // 1d55c31
+}
+enum eDashboardCommandId {
+    NONE_COMMAND = 0; // 1d55d11
+    Dashboard_Respond = 1; // 1d55cf1
+    Dashboard_Receive = 2; // 1d55cd1
+    APP_Respond = 3; // 1d55cb1
+    APP_RECEIVE = 4; // 1d55c91
+}
+message sPageStateSync {
+    //  // Object contains ONEOF - I dont think this affects wire encoding: : int None = 12; //      0x13d1e4c - oo tc=UNKNOWN
+    PageType currentPageType = 1; //      0x13d1e88 - e tc=UNKNOWN
+    optional DashboardMainPageState dashboardMain = 2; //      0x13d1ebc - aOM tc=UNKNOWN
+    optional NewsExpandedPageState newsExpanded = 3; //      0x13d1ef0 - aOM tc=UNKNOWN
+    optional StockExpandedPageState stockExpanded = 4; //      0x13d1f24 - aOM tc=UNKNOWN
+    optional CalendarExpandedPageState calendarExpanded = 5; //      0x13d1f58 - aOM tc=UNKNOWN
+    optional QuicklistExpandedPageState quicklistExpanded = 6; //      0x13d1f8c - aOM tc=UNKNOWN
+    optional HealthExpandedPageState healthExpanded = 7; //      0x13d1fc0 - aOM tc=UNKNOWN
+}
+message HealthExpandedPageState {
+    int32 currentPageIndex = 1; //      0x13d1cd0 - a tc=32768
+}
+message QuicklistExpandedPageState {
+    int32 displayedUidCount = 1; //      0x13d1af8 - a tc=32768
+    repeated int32 displayedUidList = 2; //      0x13d1b24 - p tc=32774
+    int32 borderState = 3; //      0x13d1b50 - a tc=32768
+    int32 focusedUidIndex = 4; //      0x13d1b7c - a tc=32768
+    optional bool focusedUidCompleted = 5; //      0x13d1b90 - aOB tc=UNKNOWN
+}
+message CalendarExpandedPageState {
+    int32 currentPageIndex = 1; //      0x13d19b8 - a tc=32768
+}
+message StockExpandedPageState {
+    int32 currentPageIndex = 1; //      0x13d1878 - a tc=32768
+}
+message NewsExpandedPageState {
+    int32 currentNewsIndex = 1; //      0x13d1738 - a tc=32768
+}
+message DashboardMainPageState {
+    int32 activeTileIndex = 1; //      0x13d14c8 - a tc=32768
+    PageWidgetType activeWidgetType = 2; //      0x13d1504 - e tc=UNKNOWN
+}
+message DashboardSendToApp {
+    //  // Object contains ONEOF - I dont think this affects wire encoding: : int None = 6; //      0x13d1258 - oo tc=UNKNOWN
+    int32 packageId = 1; //      0x13d1284 - a tc=32768
+    optional bool reset = 2; //      0x13d1298 - aOB tc=UNKNOWN
+    optional sStatusComponent statusComponents = 3; //      0x13d12cc - aOM tc=UNKNOWN
+    optional sWidgetComponent widgetComponents = 4; //      0x13d1300 - aOM tc=UNKNOWN
+    optional sPageStateSync pageStateSync = 5; //      0x13d1334 - aOM tc=UNKNOWN
+}
+message AppRespondToDashboard {
+    int32 packageId = 1; //      0x13d103c - a tc=32768
+    AppReceiveFLAG flag = 2; //      0x13d1078 - e tc=UNKNOWN
+}
+message DashboardContent {
+    //  // Object contains ONEOF - I dont think this affects wire encoding: : int None = 4; //      0x13d0f0c - oo tc=UNKNOWN
+    optional rStatusComponent statusComponents = 1; //      0x13d0f40 - aOM tc=UNKNOWN
+    optional rWidgetComponent widgetComponents = 2; //      0x13d0f74 - aOM tc=UNKNOWN
+}
+message DashboardDisplaySetting {
+    int32 displayMode = 1; //      0x13d0a48 - a tc=32768
+    int32 statusDisplayCount = 2; //      0x13d0a74 - a tc=32768
+    repeated StatusType statusDisplayOrder = 3; //      0x13d0ab0 - pc tc=518
+    int32 widgetDisplayCount = 4; //      0x13d0adc - a tc=32768
+    repeated WidgetType widgetDisplayOrder = 5; //      0x13d0b18 - pc tc=518
+}
+message DashboardReceiveFromApp {
+    //  // Object contains ONEOF - I dont think this affects wire encoding: : int None = 6; //      0x13d08b8 - oo tc=UNKNOWN
+    int32 packageId = 1; //      0x13d08e4 - a tc=32768
+    optional DashboardDisplaySetting bashboardDisplaySetting = 2; //      0x13d0918 - aOM tc=UNKNOWN
+    optional DashboardContent bashboardConfig = 3; //      0x13d094c - aOM tc=UNKNOWN
+    optional AppRequest appRequest = 4; //      0x13d0980 - aOM tc=UNKNOWN
+}
+message DashboardRespondToApp {
+    int32 packageId = 1; //      0x13d069c - a tc=32768
+    DashboardReceiveFLAG flag = 2; //      0x13d06d8 - e tc=UNKNOWN
+}
+message AppRequest {
+    int32 appRequestNewsInfo = 1; //      0x13d055c - a tc=32768
+}
+message sWidgetComponent {
+    //  // Object contains ONEOF - I dont think this affects wire encoding: : int None = 6; //      0x13d0380 - oo tc=UNKNOWN
+    optional sNewsWidget news = 1; //      0x13d03b4 - aOM tc=UNKNOWN
+    optional sStockWidget stock = 2; //      0x13d03e8 - aOM tc=UNKNOWN
+    optional sScheduleWidget schedule = 3; //      0x13d041c - aOM tc=UNKNOWN
+}
+message rWidgetComponent {
+    //  // Object contains ONEOF - I dont think this affects wire encoding: : int None = 6; //      0x13d01f8 - oo tc=UNKNOWN
+    optional rNewsWidget news = 1; //      0x13d022c - aOM tc=UNKNOWN
+    optional rStockWidget stock = 2; //      0x13d0260 - aOM tc=UNKNOWN
+    optional rScheduleWidget schedule = 3; //      0x13d0294 - aOM tc=UNKNOWN
+}
+message sScheduleWidget {
+    int32 syncScheduleId = 1; //      0x13d0068 - a tc=32768
+    int32 syncScheduleLine = 2; //      0x13d0094 - a tc=32768
+}
+message Schedule {
+    int32 scheduleId = 1; //      0x13cff44 - a tc=32768
+    optional string title = 2; //      0x13cff54 - aOS tc=UNKNOWN
+    optional string location = 3; //      0x13cff64 - aOS tc=UNKNOWN
+    optional string time = 4; //      0x13cff74 - aOS tc=UNKNOWN
+    int32 endTimestamp = 5; //      0x13cffa0 - a tc=32768
+}
+message rScheduleWidget {
+    int32 scheduleTotal = 1; //      0x13cfe1c - a tc=32768
+    int32 scheduleNum = 2; //      0x13cfe48 - a tc=32768
+    optional Schedule schedule = 3; //      0x13cfe7c - aOM tc=UNKNOWN
+}
+message sStockWidget {
+    optional string syncStockCode = 1; //      0x13cfcdc - aOS tc=UNKNOWN
+}
+message Stock {
+    optional string stockCode = 1; //      0x13cf9bc - aOS tc=UNKNOWN
+    optional string marketSuffix = 2; //      0x13cf9d0 - aOS tc=UNKNOWN
+    float marketCap = 3; //      0x13cf9fc - a tc=128
+    float priceChangePercent = 4; //      0x13cfa28 - a tc=256
+    float currentPrice = 5; //      0x13cfa54 - a tc=256
+    optional string companyName = 6; //      0x13cfa68 - aOS tc=UNKNOWN
+    float dayHigh = 7; //      0x13cfa94 - a tc=256
+    float dayLow = 8; //      0x13cfac0 - a tc=256
+    float openPrice = 9; //      0x13cfaec - a tc=256
+    fixed64 volume = 10; //      0x13cfb24 - a tc=1
+    float marketValue = 11; //      0x13cfb50 - a tc=128
+    float peRatio = 12; //      0x13cfb7c - a tc=256
+    int32 changingTrend = 13; //      0x13cfba8 - a tc=32768
+    int32 pointTotal = 14; //      0x13cfbd4 - a tc=32768
+    float darkPrice = 15; //      0x13cfc00 - a tc=256
+    repeated float brightPrice = 16; //      0x13cfc2c - p tc=262
+}
+message rStockWidget {
+    int32 stockTotal = 1; //      0x13cf8ac - a tc=32768
+    int32 stockNum = 2; //      0x13cf8d8 - a tc=32768
+    optional Stock stock = 3; //      0x13cf90c - aOM tc=UNKNOWN
+}
+message sNewsWidget {
+    //  // Object contains ONEOF - I dont think this affects wire encoding: : int None = 4; //      0x13cf704 - oo tc=UNKNOWN
+    optional sNewsWidgetApplyNews applyEvent = 1; //      0x13cf738 - aOM tc=UNKNOWN
+    optional sNewsWidgetSync syncEvent = 2; //      0x13cf76c - aOM tc=UNKNOWN
+}
+message sNewsWidgetSync {
+    int32 syncNewsId = 1; //      0x13cf56c - a tc=32768
+    fixed64 syncNewsBytesRead = 2; //      0x13cf5a8 - a tc=1
+}
+message sNewsWidgetApplyNews {
+    int32 requiredCount = 1; //      0x13cf400 - a tc=32768
+    int32 requiredStartId = 2; //      0x13cf42c - a tc=32768
+}
+message News {
+    int32 newsId = 1; //      0x13cf274 - a tc=32768
+    optional string title = 2; //      0x13cf284 - aOS tc=UNKNOWN
+    fixed64 reportTime = 3; //      0x13cf2c0 - a tc=1
+    optional string source = 4; //      0x13cf2d0 - aOS tc=UNKNOWN
+    optional string content = 5; //      0x13cf2e4 - aOS tc=UNKNOWN
+}
+message rNewsWidget {
+    int32 newsTotal = 1; //      0x13cf14c - a tc=32768
+    int32 newsNum = 2; //      0x13cf178 - a tc=32768
+    optional News news = 3; //      0x13cf1ac - aOM tc=UNKNOWN
+}
+message sStatusComponent {
+    optional sNotificationStatus notification = 1; //      0x13cefd8 - aOM tc=UNKNOWN
+    optional sPowerStatus power = 2; //      0x13cf00c - aOM tc=UNKNOWN
+}
+message rStatusComponent {
+    optional rWeatherStatus weather = 1; //      0x13cef0c - aOM tc=UNKNOWN
+}
+message sPowerStatus {
+    float powerLeft = 1; //      0x13ced98 - a tc=256
+    float powerRight = 2; //      0x13cedc4 - a tc=256
+}
+message sNotificationStatus {
+    int32 unreadCount = 1; //      0x13cec58 - a tc=32768
+}
+message rWeatherStatus {
+    float temperature = 1; //      0x13ce9ec - a tc=256
+    TemperatureUnit unit = 2; //      0x13cea28 - e tc=UNKNOWN
+    WeatherType type = 3; //      0x13cea60 - e tc=UNKNOWN
+    fixed64 updateTime = 4; //      0x13cea9c - a tc=1
+}
+message DashboardDataPackage {
+    //  // Object contains ONEOF - I dont think this affects wire encoding: : int None = 8; //      0x13ce684 - oo tc=UNKNOWN
+    eDashboardCommandId commandId = 1; //      0x13ce6c0 - e tc=UNKNOWN
+    int32 magicRandom = 2; //      0x13ce6ec - a tc=32768
+    optional DashboardRespondToApp dashboardRespond = 3; //      0x13ce720 - aOM tc=UNKNOWN
+    optional DashboardReceiveFromApp dashboardReceive = 4; //      0x13ce754 - aOM tc=UNKNOWN
+    optional AppRespondToDashboard appRespond = 5; //      0x13ce788 - aOM tc=UNKNOWN
+    optional DashboardSendToApp appReceive = 6; //      0x13ce7bc - aOM tc=UNKNOWN
+}

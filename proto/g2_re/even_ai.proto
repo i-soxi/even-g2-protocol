@@ -1,0 +1,123 @@
+syntax = "proto3";
+package even_connect.g2.even_ai;
+
+import "common.proto";
+
+enum eEvenAIEvent {
+    EVENT_NONE = 0; // 1d54a51
+    SCROLL = 1; // 1d54a11
+    STREAM_COMPLETE = 2; // 1d54a31
+}
+enum eEvenAIPrompt {
+    PROMPT_NONE = 0; // 1d54b11
+    NETWORK_ERR = 1; // 1d54af1
+    BLE_DISCONNECT = 2; // 1d54ad1
+    SERVER_ERR = 3; // 1d54ab1
+    TROUBLE_UNDERSTAND = 4; // 1d54a91
+    COMMAND_UNSUPPORT = 5; // 1d54a71
+}
+enum eEvenAISkill {
+    SKILL_NONE = 0; // 1d54c31
+    BRIGHTNESS = 1; // 1d54c11
+    TRANSLATE_CTRL = 2; // 1d54bf1
+    NOTIFICATION = 3; // 1d54bd1
+    TELEPROMPT = 4; // 1d54bb1
+    NAVIGATE = 5; // 1d54b91
+    CONVERSATE = 6; // 1d54b71
+    QUICKLIST = 7; // 1d54b51
+    AUTO_BRIGHTNESS = 8; // 1d54b31
+}
+enum eEvenAIVADStatus {
+    VAD_STATUS_UNKNOWN = 0; // 1d54cb1
+    VAD_START = 1; // 1d54c51
+    VAD_END = 2; // 1d54c71
+    VAD_TIMEOUT = 3; // 1d54c91
+}
+enum eEvenAIStatus {
+    STATUS_UNKNOWN = 0; // 1d54d31
+    EVEN_AI_WAKE_UP = 1; // 1d54cf1
+    EVEN_AI_ENTER = 2; // 1d54d11
+    EVEN_AI_EXIT = 3; // 1d54cd1
+}
+enum eEvenAICommandId {
+    NONE_COMMAND = 0; // 1d54eb1
+    CTRL = 1; // 1d54e91
+    VAD_INFO = 2; // 1d54e71
+    ASK = 3; // 1d54e51
+    ANALYSE = 4; // 1d54e31
+    REPLY = 5; // 1d54e11
+    SKILL = 6; // 1d54df1
+    PROMPT = 7; // 1d54dd1
+    EVENT = 8; // 1d54db1
+    HEARTBEAT = 9; // 1d54d91
+    CONFIG = 10; // 1d54d71
+    COMM_RSP = 161; // 1d54d51
+}
+message EvenAIConfig {
+    int32 voiceSwitch = 1; //      0x13d6374 - a tc=32768
+    int32 streamSpeed = 2; //      0x13d63a0 - a tc=32768
+    even_connect.g2.common.eErrorCode errorCode = 3; //      0x13d63dc - e tc=UNKNOWN
+}
+message EvenAICommRsp {
+    even_connect.g2.common.eErrorCode errorCode = 1; //      0x13d62ac - e tc=UNKNOWN
+}
+message EvenAIHeartbeat {
+    int32 hbCnt = 1; //      0x13d6198 - a tc=32768
+    even_connect.g2.common.eErrorCode errorCode = 2; //      0x13d61d4 - e tc=UNKNOWN
+}
+message EvenAIEvent {
+    eEvenAIEvent event = 1; //      0x13d5fa0 - e tc=UNKNOWN
+    even_connect.g2.common.eErrorCode errorCode = 2; //      0x13d5fdc - e tc=UNKNOWN
+}
+message EvenAIPromptInfo {
+    eEvenAIPrompt promptType = 1; //      0x13d5d98 - e tc=UNKNOWN
+    even_connect.g2.common.eErrorCode errorCode = 2; //      0x13d5dd4 - e tc=UNKNOWN
+}
+message EvenAISkillInfo {
+    int32 streamEnable = 1; //      0x13d5b00 - a tc=32768
+    eEvenAISkill skillId = 2; //      0x13d5b3c - e tc=UNKNOWN
+    int32 skillParam = 3; //      0x13d5b68 - a tc=32768
+    bytes text = 4; //      0x13d5b90 - a tc=32
+    even_connect.g2.common.eErrorCode errorCode = 5; //      0x13d5bcc - e tc=UNKNOWN
+}
+message EvenAIReplyInfo {
+    int32 cmdCnt = 1; //      0x13d597c - a tc=32768
+    int32 streamEnable = 2; //      0x13d59a8 - a tc=32768
+    int32 textMode = 3; //      0x13d59d4 - a tc=32768
+    bytes text = 4; //      0x13d59fc - a tc=32
+    even_connect.g2.common.eErrorCode errorCode = 5; //      0x13d5a38 - e tc=UNKNOWN
+}
+message EvenAIAnalyseInfo {
+    even_connect.g2.common.eErrorCode errorCode = 1; //      0x13d58b4 - e tc=UNKNOWN
+}
+message EvenAIAskInfo {
+    int32 cmdCnt = 1; //      0x13d5720 - a tc=32768
+    int32 streamEnable = 2; //      0x13d574c - a tc=32768
+    int32 textMode = 3; //      0x13d5778 - a tc=32768
+    bytes text = 4; //      0x13d57a0 - a tc=32
+    even_connect.g2.common.eErrorCode errorCode = 5; //      0x13d57dc - e tc=UNKNOWN
+}
+message EvenAIVADInfo {
+    eEvenAIVADStatus vadStatus = 1; //      0x13d5528 - e tc=UNKNOWN
+    even_connect.g2.common.eErrorCode errorCode = 2; //      0x13d5564 - e tc=UNKNOWN
+}
+message EvenAIControl {
+    eEvenAIStatus status = 1; //      0x13d5320 - e tc=UNKNOWN
+    even_connect.g2.common.eErrorCode errorCode = 2; //      0x13d535c - e tc=UNKNOWN
+}
+message EvenAIDataPackage {
+    //  // Object contains ONEOF - I dont think this affects wire encoding: : int None = 22; //      0x13d4ae0 - oo tc=UNKNOWN
+    eEvenAICommandId commandId = 1; //      0x13d4b1c - e tc=UNKNOWN
+    int32 magicRandom = 2; //      0x13d4b48 - a tc=32768
+    optional EvenAIControl ctrl = 3; //      0x13d4b7c - aOM tc=UNKNOWN
+    optional EvenAIVADInfo vadInfo = 4; //      0x13d4bb0 - aOM tc=UNKNOWN
+    optional EvenAIAskInfo askInfo = 5; //      0x13d4be4 - aOM tc=UNKNOWN
+    optional EvenAIAnalyseInfo analyseInfo = 6; //      0x13d4c18 - aOM tc=UNKNOWN
+    optional EvenAIReplyInfo replyInfo = 7; //      0x13d4c4c - aOM tc=UNKNOWN
+    optional EvenAISkillInfo skillInfo = 8; //      0x13d4c80 - aOM tc=UNKNOWN
+    optional EvenAIPromptInfo promptInfo = 9; //      0x13d4cb4 - aOM tc=UNKNOWN
+    optional EvenAIEvent event = 10; //      0x13d4ce8 - aOM tc=UNKNOWN
+    optional EvenAIHeartbeat heartbeat = 11; //      0x13d4d1c - aOM tc=UNKNOWN
+    optional EvenAICommRsp resp = 12; //      0x13d4d50 - aOM tc=UNKNOWN
+    optional EvenAIConfig config = 13; //      0x13d4d80 - aOM tc=UNKNOWN
+}

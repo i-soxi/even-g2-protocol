@@ -1,0 +1,22 @@
+syntax = "proto3";
+package even_connect.g2.glasses_case;
+
+import "common.proto";
+
+enum eGlassesCaseCommandId {
+    NONE_COMMAND = 0; // 1d54931
+    CASE_INFO = 1; // 1d54911
+}
+message GlassesCaseInfo {
+    int32 soc = 1; //      0x13d79dc - a tc=32768
+    int32 chargeStatus = 2; //      0x13d7a08 - a tc=32768
+    int32 lidStatus = 3; //      0x13d7a34 - a tc=32768
+    int32 inCaseStatus = 4; //      0x13d7a60 - a tc=32768
+    even_connect.g2.common.eErrorCode errorCode = 5; //      0x13d7a9c - e tc=UNKNOWN
+}
+message GlassesCaseDataPackage {
+    //  // Object contains ONEOF - I dont think this affects wire encoding: : int None = 2; //      0x13d7878 - oo tc=UNKNOWN
+    eGlassesCaseCommandId commandId = 1; //      0x13d78b4 - e tc=UNKNOWN
+    int32 magicRandom = 2; //      0x13d78e0 - a tc=32768
+    optional GlassesCaseInfo caseInfo = 3; //      0x13d7914 - aOM tc=UNKNOWN
+}

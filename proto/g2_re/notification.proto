@@ -1,0 +1,41 @@
+syntax = "proto3";
+package even_connect.g2.notification;
+
+import "common.proto";
+
+enum eNotificationCommandId {
+    NONE_COMMAND = 0; // 1d543d1
+    NOTIFICATION_CTRL = 1; // 1d543b1
+    NOTIFICATION_IOS = 2; // 1d54391
+    NOTIFICATION_WHITELIST_CTRL = 3; // 1d54371
+    NOTIFICATION_COMM_RSP = 161; // 1d54351
+}
+message NotificationWhitelistCtrl {
+    int32 whitelistDisable = 1; //      0x13da43c - a tc=32768
+    even_connect.g2.common.eErrorCode errorCode = 2; //      0x13da478 - e tc=UNKNOWN
+}
+message NotificationCommRsp {
+    eNotificationCommandId commandId = 1; //      0x13da338 - e tc=UNKNOWN
+    even_connect.g2.common.eErrorCode errorCode = 2; //      0x13da374 - e tc=UNKNOWN
+}
+message NotificationIOS {
+    bytes appID = 1; //      0x13da1f8 - a tc=32
+    bytes displayName = 2; //      0x13da224 - a tc=32
+    even_connect.g2.common.eErrorCode errorCode = 3; //      0x13da260 - e tc=UNKNOWN
+}
+message NotificationControl {
+    int32 notifEnable = 1; //      0x13da070 - a tc=32768
+    int32 autoDispEnable = 2; //      0x13da09c - a tc=32768
+    int32 dispTime = 3; //      0x13da0c8 - a tc=32768
+    even_connect.g2.common.eErrorCode errorCode = 4; //      0x13da104 - e tc=UNKNOWN
+    int32 avoidDisturbEnable = 5; //      0x13da130 - a tc=32768
+}
+message NotificationDataPackage {
+    //  // Object contains ONEOF - I dont think this affects wire encoding: : int None = 8; //      0x13d9d08 - oo tc=UNKNOWN
+    eNotificationCommandId commandId = 1; //      0x13d9d44 - e tc=UNKNOWN
+    int32 magicRandom = 2; //      0x13d9d70 - a tc=32768
+    optional NotificationControl ctrl = 3; //      0x13d9da4 - aOM tc=UNKNOWN
+    optional NotificationIOS IOS = 4; //      0x13d9dd8 - aOM tc=UNKNOWN
+    optional NotificationCommRsp resp = 5; //      0x13d9e0c - aOM tc=UNKNOWN
+    optional NotificationWhitelistCtrl whitelistCtrl = 6; //      0x13d9e40 - aOM tc=UNKNOWN
+}

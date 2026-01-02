@@ -1,0 +1,111 @@
+syntax = "proto3";
+package even_connect.g2.teleprompt;
+
+
+enum TelepromptErrorCode {
+    TELEPROMPT_SUCCESS = 0; // 1d536b1
+    TELEPROMPT_ERR_FAIL = 1; // 1d53691
+    TELEPROMPT_ERR_CLOSED = 2; // 1d53671
+    TELEPROMPT_ERR_REPEATED_MESSAGE = 3; // 1d53651
+    TELEPROMPT_ERR_PD_DECODE_FAIL = 4; // 1d53631
+}
+enum TelepromptCtrlCmd {
+    CMD_NONE = 0; // 1d53751
+    START = 1; // 1d53731
+    PAUSE = 2; // 1d53711
+    RESUME = 3; // 1d536f1
+    CLOSE = 4; // 1d536d1
+}
+enum TelepromptMode {
+    MODE_AI = 0; // 1d537b1
+    MODE_MANUAL = 1; // 1d53791
+    MODE_AUTO = 2; // 1d53771
+}
+enum TelepromptCommandId {
+    TELEPROMPT_NONE = 0; // 1d53931
+    TELEPROMPT_CONTROL = 1; // 1d53911
+    TELEPROMPT_FILE_LIST = 2; // 1d538f1
+    TELEPROMPT_PAGE_DATA = 3; // 1d538d1
+    TELEPROMPT_PAGE_AI_SYNC = 4; // 1d538b1
+    TELEPROMPT_STATUS_NOTIFY = 161; // 1d53891
+    TELEPROMPT_FILE_LIST_REQUEST = 162; // 1d53871
+    TELEPROMPT_FILE_SELECT = 163; // 1d53851
+    TELEPROMPT_PAGE_DATA_REQUEST = 164; // 1d53831
+    TELEPROMPT_PAGE_SCROLL_SYNC = 165; // 1d53811
+    TELEPROMPT_COMM_RESP = 166; // 1d537f1
+    TELEPROMPT_HEART_BEAT = 255; // 1d537d1
+}
+message TelepromptHeartBeat {
+    int32 appPageId = 1; //      0x13dd7b8 - a tc=32768
+    int32 appLineId = 2; //      0x13dd7e4 - a tc=32768
+    int32 osPageId = 3; //      0x13dd810 - a tc=32768
+    int32 osLineId = 4; //      0x13dd83c - a tc=32768
+}
+message TelepromptScrollSync {
+    int32 pageId = 1; //      0x13dd69c - a tc=32768
+    int32 lineId = 2; //      0x13dd6c8 - a tc=32768
+    int32 mode = 3; //      0x13dd6f0 - a tc=32768
+}
+message TelepromptCommResp {
+    TelepromptErrorCode errCode = 1; //      0x13dd5d4 - e tc=UNKNOWN
+}
+message TelepromptPageDataRequest {
+    int32 pageId = 1; //      0x13dd4fc - a tc=32768
+}
+message TelepromptFileSelect {
+    bytes fileId = 1; //      0x13dd434 - a tc=32
+}
+message TelepromptFileListRequest {
+}
+message TelepromptStatusNotify {
+    TelepromptCtrlCmd cmd = 1; //      0x13dd1a0 - e tc=UNKNOWN
+    TelepromptErrorCode errCode = 2; //      0x13dd1dc - e tc=UNKNOWN
+}
+message TelepromptAISync {
+    int32 pageId = 1; //      0x13dd070 - a tc=32768
+    int32 lineId = 2; //      0x13dd09c - a tc=32768
+    int32 charId = 3; //      0x13dd0c8 - a tc=32768
+}
+message TelepromptPageData {
+    int32 pageId = 1; //      0x13dcf50 - a tc=32768
+    int32 pageLineCount = 2; //      0x13dcf7c - a tc=32768
+    bytes pageText = 3; //      0x13dcfa8 - a tc=32
+}
+message TelepromptFileList {
+    repeated TelepromptFileInfo files = 1; //      0x13dce88 - pc tc=2097154
+}
+message TelepromptControl {
+    TelepromptCtrlCmd cmd = 1; //      0x13dcc84 - e tc=UNKNOWN
+    optional TelepromptSetting startSettings = 2; //      0x13dccb8 - aOM tc=UNKNOWN
+}
+message TelepromptSetting {
+    TelepromptMode mode = 1; //      0x13dc8e0 - e tc=UNKNOWN
+    int32 startPageId = 2; //      0x13dc90c - a tc=32768
+    int32 startLineId = 3; //      0x13dc938 - a tc=32768
+    int32 totalPages = 4; //      0x13dc964 - a tc=32768
+    int32 totalLines = 5; //      0x13dc990 - a tc=32768
+    int32 displayWidth = 6; //      0x13dc9bc - a tc=32768
+    int32 scrollIntervalMs = 7; //      0x13dc9e8 - a tc=32768
+    int32 countdownSeconds = 8; //      0x13dca14 - a tc=32768
+    int32 useAudio = 9; //      0x13dca40 - a tc=32768
+}
+message TelepromptFileInfo {
+    bytes fileId = 1; //      0x13dc7e0 - a tc=32
+    bytes filename = 2; //      0x13dc80c - a tc=32
+}
+message TelepromptDataPackage {
+    //  // Object contains ONEOF - I dont think this affects wire encoding: : int None = 22; //      0x13dc21c - oo tc=UNKNOWN
+    TelepromptCommandId commandId = 1; //      0x13dc258 - e tc=UNKNOWN
+    int32 magicRandom = 2; //      0x13dc284 - a tc=32768
+    optional TelepromptControl ctrl = 3; //      0x13dc2b8 - aOM tc=UNKNOWN
+    optional TelepromptFileList fileList = 4; //      0x13dc2ec - aOM tc=UNKNOWN
+    optional TelepromptPageData pageData = 5; //      0x13dc320 - aOM tc=UNKNOWN
+    optional TelepromptAISync aiSync = 6; //      0x13dc354 - aOM tc=UNKNOWN
+    optional TelepromptStatusNotify statusNotify = 7; //      0x13dc388 - aOM tc=UNKNOWN
+    optional TelepromptFileListRequest fileListReq = 8; //      0x13dc3bc - aOM tc=UNKNOWN
+    optional TelepromptFileSelect fileSelect = 9; //      0x13dc3f0 - aOM tc=UNKNOWN
+    optional TelepromptPageDataRequest pageDataReq = 10; //      0x13dc424 - aOM tc=UNKNOWN
+    optional TelepromptScrollSync scrollSync = 11; //      0x13dc458 - aOM tc=UNKNOWN
+    optional TelepromptCommResp commResp = 12; //      0x13dc48c - aOM tc=UNKNOWN
+    optional TelepromptHeartBeat heartBeat = 13; //      0x13dc4c0 - aOM tc=UNKNOWN
+}

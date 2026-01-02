@@ -1,0 +1,17 @@
+syntax = "proto3";
+package even_connect.g2.sync_info;
+
+
+enum Sync_Info_Cmd_list {
+    APP_REQUEST_SYNC_INFO = 0; // 1d53971
+    OS_NOTIFY_SYNC_INFO = 1; // 1d53951
+}
+message sync_info_main_msg_ctx {
+    Sync_Info_Cmd_list cmdList = 1; //      0x13dc090 - e tc=UNKNOWN
+    int32 magicRandom = 2; //      0x13dc0bc - a tc=32768
+    optional sync_info_data_msg dataMsg = 3; //      0x13dc0f0 - aOM tc=UNKNOWN
+}
+message sync_info_data_msg {
+    int32 backgroundAppID = 1; //      0x13dbf14 - a tc=32768
+    int32 foregroundAppID = 2; //      0x13dbf40 - a tc=32768
+}
