@@ -30,9 +30,6 @@ from ring_pb2 import RingDataPackage
 
 from efs_transmit_pb2 import *
 
-failed_msgs = {}
-
-
 
 # This defines the list of diffrent potential service ids
 class ServiceID:
@@ -231,9 +228,13 @@ def calc_crc_32(data: bytes | bytearray | memoryview) -> int:
 
 
 
-# after we have parsed a packet header, this actually parses the proper protobuf class based on
-# service id
 class BleDataPackage:
+    """Main parsing class for the protobuf based command messages.
+
+        fromServiceId will, given a serviceId and payload, determine which class to parse
+        based on serviceId and then parse the actual message and return it, otherwise None
+        if something fails or there is no handler defined for it
+    """
     @staticmethod
     def fromServiceId(serviceId, payload):
         if not payload:
@@ -265,6 +266,11 @@ class BleDataPackage:
 ## outer Transport header class that is put as a header on any packet
 @dataclass
 class EvenBleTransport:
+    """Transport header class that is used as the header on all packets sent with the glases
+
+        fromBytes will decode a raw packet payload into header fields and a sub payload of the
+        actual message
+    """
     sourceId: int
     destinationId: int
     syncId: int
@@ -302,13 +308,13 @@ class EvenBleTransport:
         # Minimum BLE frame length check.
         data_len = len(data_bytes)
         if data_len < 8:
-            raise ValueError("Data too short")
+            print("    !!!!!!Data too short")
             return None
 
-
+        # check that we have a proper start byte
         header = int(data_bytes[0])
         if header != 0xAA:
-            raise ValueError("Header was not 0xAA")
+            print("    !!!!!!Header was not 0xAA")
             return None
 
         byte1 = int(data_bytes[1])
@@ -321,7 +327,7 @@ class EvenBleTransport:
         # validate that the packet len is what we expect
         expectLen = payloadLen + 8 # header has 8 bytes    #### LEN is good
         if data_len < expectLen:
-            raise ValueError("Got less data than header would indicate")
+            print("    !!!!!!Message header length did not match data lenght")
             return None
 
 
@@ -370,6 +376,7 @@ class EvenBleTransport:
 
 
     def dataPackage(self):
+        """Try to parse a protobuf message for the main payload and return it"""
         sid = self.serviceId
         return BleDataPackage.fromServiceId(sid, self.payload)
 
@@ -383,32 +390,28 @@ class EvenBleTransport:
 class MsgHandler:
     def __init__(self):
         self.partials = {}
+        self.failed_msgs = {}
 
-        self.data = None
 
-
-    def handleCommonCmd(self, transport, packet):
-
+    def handleCommonCmd(self, transport):
+        """Standard command protocol handler"""
         serviceId = transport.serviceId
         resultCode = transport.resultCode
         packetSerialNum = transport.packetSerialNum
         packetTotalNum = transport.packetTotalNum
 
-
         print("     header: ", transport)
-
         if resultCode != 0:
             print("     !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
             print("     --> failed result message")
             return
 
 
-
         dataPackage = transport.dataPackage()
         if dataPackage is None and service_id_class_mapping.get(serviceId, None) is not None:
             sid_class = service_id_class_mapping.get(serviceId, None)
-            failed_msgs.setdefault(sid_class, [0])
-            failed_msgs[sid_class][0] += 1
+            self.failed_msgs.setdefault(sid_class, [0])
+            self.failed_msgs[sid_class][0] += 1
             print("     !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
 
         if not transport.notify:
@@ -426,11 +429,13 @@ class MsgHandler:
             print("     !!!!!!!!!!!!!!!!!!!!!!! CRC check failed")
 
 
-    def handleFileService(self, transport, packet):
+    def handleFileService(self, transport):
+        """File service handler"""
+
+        # @TODO: clean this up / break out sections - its hacked for one log right now
         print("    GOT FILE SERVICE: ", transport)
-
         if transport.serviceId == ServiceID.UX_EVEN_FILE_SERVICE_RAW_SEND_DATA_ID: # c5
-
+            # data send channel
             if transport.destinationId == 2:
                 print("     fileservice: GotSentFileData: ", transport.payload)
                 print("     Got full file data: ", transport.payload)
@@ -441,7 +446,9 @@ class MsgHandler:
 
         elif transport.serviceId == ServiceID.UX_EVEN_FILE_SERVICE_CMD_EXPORT_ID: # c6
             raise ValueError("not implemented")
+
         elif transport.serviceId == ServiceID.UX_EVEN_FILE_SERVICE_CMD_SEND_ID:  # c4
+            # command send channel
             serviceCID = transport.payload[0]
             if serviceCID == EVEN_FILE_SERVICE_CMD_SEND_START:
 
@@ -475,7 +482,18 @@ class MsgHandler:
 
 
 
-    def accum_multipart_done(self, transport, packet):
+    def accum_multipart_done(self, transport):
+        """Check if this is a multi part packet and handle it accordingly
+
+            If there is a previous packet in the chain (based on (serviceId, syncId)) -
+                accumulate the payload with the previous accumulated payload.
+
+            If we're in a multi part packet, then save off the accumulated payload for
+            use when the next message comes
+
+            Once the last message in a message chain is seen, actually return the
+            last transport packet with a full accumulated payload for the entire message chain
+        """
         serviceId = transport.serviceId
         packetSerialNum = transport.packetSerialNum
         packetTotalNum = transport.packetTotalNum
@@ -513,35 +531,56 @@ class MsgHandler:
 
     # main packet handler
     def handle(self, packet):
+        """Handle a single new packet
 
+            It's expected that you only call this with packets which are:
+            * btatt protocol read / write
+            * pre-filtered for the payload starting with the 0xAA starting byte
+        """
+
+        # parse transport header
         transport = EvenBleTransport.fromBytes(packet)
         assert transport
 
-        transport = self.accum_multipart_done(transport, packet)
+        # check and accumulate data if this is a multipart send
+        # if this is multipart and the message isn't finished then None will be returned
+        transport = self.accum_multipart_done(transport)
 
+        # if we're in the middle of a multipart message, then don't process
         if transport is None:
             return
 
 
-        serviceId = transport.serviceId
-
-        if serviceId in [
+        # route to different handlers depending on which serviceID it is
+        #   In the actual glasses it looks like there are:
+        #       * file service with its own protocol/objects
+        #       * ota service with its own protocol/objects
+        #       * stream handling with its own protocol
+        #       * common command handling which uses proto buffers
+        #
+        #   Currently this only implements a part of the file service and the command service
+        if transport.serviceId in [
             ServiceID.UX_EVEN_FILE_SERVICE_RAW_SEND_DATA_ID,
             ServiceID.UX_EVEN_FILE_SERVICE_CMD_EXPORT_ID,
             ServiceID.UX_EVEN_FILE_SERVICE_CMD_SEND_ID,
             ServiceID.UX_EVEN_FILE_SERVICE_RAW_EXPORT_DATA_ID,
         ]:
-            self.handleFileService(transport, packet)
+            self.handleFileService(transport)
 
         else:
-            self.handleCommonCmd(transport, packet)
-
+            self.handleCommonCmd(transport)
 
 
 
 
 
 def parse_text_log(filename):
+    """Parse original text logs (posted by soxi) for messages
+
+        These seemed to be missing a lot of packets, but it's left here in case its useful.
+
+        Find any 0xAA payload to process
+    """
     handler = MsgHandler()
     for line in open(filename):
         line = line.strip()
@@ -572,25 +611,34 @@ def parse_text_log(filename):
             handler.handle(data_bytes)
 
 
-
-# parse and print packets from a btsnoop log
-def parse_snoop_log_csv(filename):
+def tshark_maybe_process_snoop_log_to_csv(filename):
     # run tshark to get the right columns if this isn't already in csv format for us
     if not filename.endswith(".csv"):
         print("Assuming this is a raw snoop log, generating csv first")
         os.system(f"tshark -r {filename} -2  -Y btatt  -T fields -e bluetooth.src -e _ws.col.Source -e bluetooth.dst -e _ws.col.Destination -e btatt.length -e btatt.value -E separator=, > _temp_snooplog.csv")
         filename = '_temp_snooplog.csv'
 
+    return filename
 
+
+# parse and print packets from a btsnoop log
+def parse_snoop_log_csv(filename):
+    """Parse original text logs (posted by soxi) for messages
+
+        These seemed to be missing a lot of packets, but it's left here in case its useful.
+
+        Find any 0xAA payload to process
+    """
+
+    # maybe process if this isn't already a csv
+    filename = tshark_maybe_process_snoop_log_to_csv(filename)
+
+
+    # main message handler
     handler = MsgHandler()
 
-    mac_r1 = "c0:f6:30:5e:9d:10"
-    mac_g2_l = "c0:a8:06:b9:dc:6e"
-    mac_g2_r = "e0:51:6a:76:22:23"
-
-    glasses_macs = [mac_g2_l, mac_g2_r]
+    # read the tshark csv
     df = pd.read_csv(filename)
-
     df.columns = [
         'srcmac',
         'srcstr',
@@ -605,12 +653,12 @@ def parse_snoop_log_csv(filename):
     for i in range(len(df)):
         r = df.iloc[i,:]
 
+        # filter for if this is a message between glasses, phone, and or ring
+        src_is_glasses = ('Even G2' in r['srcstr'])
+        dst_is_glasses = ('Even G2' in r['dststr'])
 
-        src_is_glasses = (r['srcmac'] in glasses_macs) or ('Even G2' in r['srcstr'])
-        dst_is_glasses = (r['dstmac'] in glasses_macs) or ('Even G2' in r['dststr'])
-
-        src_is_ring = (r['srcmac'] == mac_r1) or ('Even R1' in r['srcstr'])
-        dst_is_ring = (r['dstmac'] == mac_r1) or ('Even R1' in r['dststr'])
+        src_is_ring = ('Even R1' in r['srcstr'])
+        dst_is_ring = ('Even R1' in r['dststr'])
 
         src = r['srcstr']
         dest = r['dststr']
@@ -621,7 +669,9 @@ def parse_snoop_log_csv(filename):
                 print("------------------------------------------------------")
                 print("Msg: ", data)
                 print(f"    {src} -> {dest}")
+
                 if data.startswith('aa'):
+                    # convert the data to bytes (its in a hex string in the output)
                     assert len(data) % 2 == 0
                     vals = []
                     for i in range(0, len(data), 2):
@@ -629,17 +679,26 @@ def parse_snoop_log_csv(filename):
 
                     data_bytes = bytes(vals)
 
-
-
+                    # actually handle the message
                     handler.handle(data_bytes)
+
+    return handler
 
 
 
 
 
 if __name__ == '__main__':
-    parse_snoop_log_csv(sys.argv[1])
+    if len(sys.argv) < 2:
+        print("Usage:  python parser.py snoop_log_filename")
+        sys.exit(1)
 
+    handler = parse_snoop_log_csv(sys.argv[1])
 
-    for k, v in failed_msgs.items():
-        print("FAILED: ", k, " : ", v)
+    # this is hacky but just for debugging, I dump out a failed msg count for each
+    # msg type that failed
+    if handler.failed_msgs:
+        print("---------------------------------------------------------------------------------")
+        print("Failed message: ")
+        for k, v in handler.failed_msgs.items():
+            print(   "type=", k, " : nfailed=", v[0])
