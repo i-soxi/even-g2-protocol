@@ -38,7 +38,7 @@ message TimeSyncRequest {
 message TimeSyncData {
   uint32 unknown1 = 2;      // Always 17 (0x11)?
   uint64 timestamp = 1;     // Unix timestamp (varint)
-  int64 transaction_id = 2; // Usually -24 (0xFFFFFFFFFFFFFFE8)
+  int64 transaction_id = 3; // Usually -24 (0xFFFFFFFFFFFFFFE8)
 }
 
 // =============================================================================
