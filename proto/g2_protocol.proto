@@ -193,6 +193,37 @@ message ConversateTranscript {
   bool is_final = 2;        // True if final result
 }
 
+// -----------------------------------------------------------------------------
+// Observations (reverse engineered; subject to change across firmware versions)
+// -----------------------------------------------------------------------------
+// Payload is a protobuf-encoded ConversateMessage inside the transport frame:
+//   [0xAA][type][seq][len][pkt_tot][pkt_ser][svc_hi][svc_lo][protobuf...][crc16]
+//
+// Observed protobuf structure for real-time transcript updates:
+//   - ConversateMessage.type (field 1) has been observed as 0x05 for transcript updates.
+//   - ConversateMessage.msg_id (field 2) appears to be used as an update identifier.
+//     Incrementing msg_id for each update makes the display reliably refresh.
+//   - ConversateTranscript.text (field 1) is UTF-8.
+//   - ConversateTranscript.is_final (field 2) has been observed as:
+//       false -> partial (intermediate) update
+//       true  -> final (confirmed) update
+//
+// NOTE: "msg_id" naming is kept for compatibility with the rest of this file,
+// but for Conversate it behaves like a per-update counter (update_id).
+
+enum ConversateType {
+  CONVERSATE_TYPE_UNSPECIFIED = 0;
+  CONVERSATE_TYPE_TRANSCRIPT_UPDATE = 5; // Observed in BLE captures
+}
+
+// Optional helper message for implementations that want a named field for the
+// update counter while keeping wire compatibility.
+// This is NOT observed on the wire as a distinct message; it documents behavior.
+message ConversateUpdateHint {
+  uint32 update_id = 1;     // Mirrors ConversateMessage.msg_id semantics
+  bool is_final = 2;        // Mirrors ConversateTranscript.is_final semantics
+}
+
 // =============================================================================
 // Notification Service (0x02-20)
 // =============================================================================
