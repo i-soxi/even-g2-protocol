@@ -1,60 +1,616 @@
-// Even Realities G2 Protocol Buffers
-// Reverse engineered from BLE traffic analysis
+// Even Realities G2 Protocol Buffers — Reverse Engineered
+// Updated: 2026-02-27 from 7 passive BLE snooper captures:
+//   Capture 1 (130528): 556 packets, 19 services (init + mic session)
+//   Capture 2 (132707): 1842 packets, 24 services (teleprompter + AI + settings)
+//   Capture 3 (134915): 1788 packets, 27 services (AI voice + Conversate + reconnect)
+//   Capture 4 (141920): 365 packets, 24 services (silent mode + app runtime 0xE0)
+//   Capture 5 (144331): 350 packets, 25 services (AI+Conversate+Voice+App combo)
+//   Capture 6 (150306): 277 packets, 27 services (notifications+conversate+tele+translate+AI)
+//   Capture 7 (153320): 108 packets, 17 services (dashboard navigation + ring scroll)
 //
-// NOTE: Field numbers and types are inferred from captured packets.
-// Some fields may be incomplete or incorrectly typed.
+// ============================================================================
+// HARDWARE
+// ============================================================================
+// Three BLE peripherals:
+//   Left arm:   Even G2_32_L_1DAD73  (audio source — mic streams on LEFT only)
+//   Right arm:  Even G2_32_R_4A56B4  (primary control, dashboard, device info)
+//   R1 Ring:    884A62D5             (input controller — tap, scroll, long press)
+// Firmware: 2.0.7.16
+// BLE UUID base: 00002760-08c2-11e1-9073-0e8ac72e{XXXX}
+//
+// ============================================================================
+// GATT TABLE (per arm — identical on both)
+// ============================================================================
+// Service 0x1001  "System"    Char 0x0001 (write) / 0x0002 (notify)
+// Service 0x5450  "Protocol"  Char 0x5401 (write) / 0x5402 (notify) ← main data
+// Service 0x6450  "Display"   Char 0x6401 (write) / 0x6402 (notify) ← +mic audio
+// Service 0x7450  "Audio"     Char 0x7401 (write) / 0x7402 (notify) ← UNUSED
+//
+// Audio streams on 0x6402 LEFT arm (not 0x7402 despite name).
+// MTU: 527 bytes. Connection: LE with lmHandle per device.
+//
+// ============================================================================
+// TRANSPORT — 0xAA FRAMED PACKETS (on 0x5401/0x5402)
+// ============================================================================
+// [0xAA] [dir] [seq] [len_hi] [len_lo] [pkt_tot] [pkt_ser] [svc_hi] [svc_lo] [payload] [crc16]
+//
+//   dir:     0x21=phone→glasses, 0x12=glasses→phone
+//   seq:     monotonic (wraps 0xFF)
+//   len:     payload_len + 2 (CRC)
+//   pkt_tot: total packets in multi-packet message
+//   pkt_ser: packet index (0-based)
+//   svc_hi:  service category
+//   svc_lo:  direction suffix:
+//              0x00 = glasses→phone ACK/response
+//              0x01 = glasses→phone data push (unsolicited)
+//              0x20 = phone→glasses command
+//              0x21 = phone→glasses data push
+//   CRC:     CRC-16/CCITT (init 0xFFFF) over payload, little-endian
+//
+// ============================================================================
+// AUDIO TRANSPORT — RAW LC3 (on 0x6402 LEFT arm, NO 0xAA framing)
+// ============================================================================
+// 205 bytes/pkt: 5 × 40B LC3 frames + 4B metadata + 1B counter
+// LC3: 16kHz, 10ms frames, 32kbps. Rate: ~20.1 pkt/s, ~100.5 frames/s.
+// Counter at byte[204], monotonic across mic on/off gaps (no lost packets).
+// Mic trigger: only via EvenAI on glasses main menu (NOT from BLE commands).
+//
+// ============================================================================
+// SERVICE ID MAP — CONFIRMED (6 snooper captures, 2026-02-27)
+// ============================================================================
+//
+// Svc  Lo  Direction        Name                    C1  C2  C3  C4  C5  C6  C7  Evidence
+// ---- --- --------------- ----------------------- --- --- --- --- --- --- --- --------------------------------
+// 0x01 00  glasses→phone    General ACK             11  20  27  13  12  17  9   Bulk init, type=1,6 (+f8.f1=10)
+// 0x01 01  glasses→phone    Event Stream            9   26  30  6   35  17  28  Scroll+click: types 1-6 ★ C7
+// 0x01 20  phone→glasses    Auth/Init               -   -   -   -   -   -   -   Write-only (not captured)
+// 0x03 00  glasses→phone    Notification ACK        3   3   7   -   3   3   3   Init sequence, field 4 (not 3)
+// 0x03 20  phone→glasses    Notification Push       -   -   -   -   -   -   -   Write-only
+// 0x04 00  glasses→phone    Display ACK             1   1   3   1   1   1   1   +f3.f5=1 variant (C3)
+// 0x04 20  phone→glasses    Display Command         -   -   -   -   -   -   -   Teleprompter, wake, content
+// 0x04 21  phone→glasses    Display Data            -   -   -   -   -   -   -   Image raw
+// 0x05 00  glasses→phone    AI Heartbeat            -   12  -   -   6   8   -   type=162, f7 empty, ~3s
+// 0x05 01  glasses→phone    AI State Push           -   5   -   -   2   2   -   type=161/163, session ctrl
+// 0x06 00  glasses→phone    Teleprompter HB         -   8   9   1   -   6   -   type=166, f12 empty, ~6s
+// 0x06 01  glasses→phone    Teleprompter Response   -   9   4   1   -   6   -   type=161-165, script ID!
+// 0x06 20  phone→glasses    Teleprompter Command    -   -   -   -   -   -   -   Write-only (confirmed working)
+// 0x07 00  glasses→phone    Dashboard ACK           33  26  29  21  1   22  1   8 sub-types (+type=10 HB)
+// 0x07 01  glasses→phone    Mic/AI State Push       4   4   6   3   -   2   -   1=on, 3=off, 8=AI processing
+// 0x07 20  phone→glasses    Dashboard Command       -   -   -   -   -   -   -   Text, mic control
+// 0x08 00  glasses→phone    AI Voice Session ACK    -   -   38  -   32  -   -   token ack + render HB
+// 0x08 01  glasses→phone    AI Voice Session Push   1   -   15  -   7   -   -   lifecycle: init+ctx+tokens+end
+// 0x09 00  glasses→phone    Device Info ACK         4   35  9   4   4   4   4   Settings feedback: vol/bright
+// 0x09 01  glasses→phone    Device State Push       10  26  5   18  25  21  1   Periodic + settings reflection
+// 0x09 20  phone→glasses    Device Info Request     -   -   -   -   -   -   -   Write-only
+// 0x0B 00  glasses→phone    Conversate Heartbeat    -   -   39  43  20  31  -   type=162, ~0.5s interval
+// 0x0B 01  glasses→phone    Conversate State Push   -   -   2   2   2   2   -   type=161, start/end
+// 0x0C 00  glasses→phone    Tasks ACK               1   1   8   1   1   1   1   +task_id + confirmed flag (C3)
+// 0x0D 00  glasses→phone    Navigation Init         1   1   2   1   1   1   1   {f3.f1=1, f3.f2=3} ★ C7
+// 0x0D 01  glasses→phone    Screen State            20  42  27  37  46  42  1   Pages: 1,5,6,8,11,224,266 ★
+// 0x0E 00  glasses→phone    Display Settings        27  10  22  11  11  10  29  Dashboard layout ★ C7 (29!)
+// 0x0E 20  phone→glasses    Display Config          -   -   -   -   -   -   -   Write-only
+// 0x10 00  glasses→phone    Glasses Config ACK      1   1   2   -   1   1   1   {f3.f1=4}
+// 0x20 00  glasses→phone    Commit Response         2   2   4   -   2   2   2   Init finalization
+// 0x80 00  glasses→phone    Heartbeat               13  29  43  -   38  39  12  type=14 keep-alive ★ confirmed
+// 0x80 01  glasses→phone    Heartbeat Data          12  25  38  -   33  34  12  ~10s periodic, RIGHT arm
+// 0x80 20  phone→glasses    Heartbeat Command       -   -   -   -   -   -   -   Write-only (confirmed working)
+// 0x81 00  glasses→phone    Battery Status          1   1   2   -   1   1   1   battery%=100, charging=1
+// 0x91 00  glasses→phone    Device Identity         1   1   2   -   1   1   1   MAC=b1:6a:9f:2f:43:dc
+// 0xE0 00  glasses→phone    App Runtime ACK         -   -   -   83  50  -   -   App heartbeat + silent mode
+// 0xE0 01  glasses→phone    App Navigation Push     -   -   -   39  15  -   -   UI nav with ASCII strings
+//
+// ============================================================================
+// APP BINARY ANALYSIS — Official Proto Names (Even.app v2026.02.15)
+// ============================================================================
+// Source: strings extraction from /Applications/Even.app/.../App.framework/App
+// Package: even_connect/g2/proto/generated/ (26 proto modules)
+// See: docs/app-binary-analysis.md for full details
+//
+// Official proto modules → our service IDs:
+//   conversate/     → 0x0B  ConversateDataPackage    ConversateCommandId
+//   dashboard/      → 0x07  DashboardDataPackage     eDashboardCommandId
+//   even_ai/        → 0x05  EvenAIDataPackage        eEvenAICommandId
+//   teleprompt/     → 0x06  TelepromptDataPackage     TelepromptCommandId
+//   translate/      → 0x05  TranslateDataPackage      (routes through Even AI!)
+//   notification/   → 0x03  NotificationDataPackage  eNotificationCommandId
+//   EvenHub/        → 0x04  evenhub_main_msg_ctx     EvenHub_Cmd_List
+//   navigation/     → 0x0D  navigation_main_msg_ctx  Navigation_Cmd_list
+//   g2_setting/     → 0x0E  G2SettingPackage         g2_settingCommandId
+//   dev_config/     → 0x10  DevCfgDataPackage        eDevCfgCommandId
+//   dev_infomation/ → 0x09  (typo in original!)      (dev info queries)
+//   dev_pair_mgr/   → 0x20  (commit/sync)
+//   quicklist/      → 0x0C  QuicklistDataPackage     eQuicklistCommandId
+//   health/         → ???   HealthDataPackage         eHealthCommandId         ★ dashboard page 2, R1 Ring vitals
+//   ring/           → ???   RingDataPackage           eRingCommandId           ★ R1 Ring settings/config
+//   menu/           → ???   meun_main_msg_ctx (typo!) Menu_Cmd_List
+//   onboarding/     → ???   OnboardingDataPackage    eOnboardingCommandId
+//   glasses_case/   → ???   GlassesCaseDataPackage   eGlassesCaseCommandId
+//   logger/         → ???   logger_main_msg_ctx      logger_Cmd_list
+//   module_config/  → ???   module_configure_main_msg_ctx
+//   sync_info/      → ???   sync_info_main_msg_ctx   Sync_Info_Cmd_list
+//   transcribe/     → ???   TranscribeDataPackage    eTranscribeCommandId
+//   efs_transmit/   → ???   (embedded file transfer)
+//   ota_transmit/   → ???   (firmware OTA update)
+//
+// Key discovery: Translate has NO _createTranslateDataPackage method —
+//   it routes entirely through Even AI service (0x05). This confirms our
+//   C6 observation where Translate only shows 0x05 traffic.
+//
+// ============================================================================
+// EVENAI FEATURES TESTED (user-reported, mapped to services)
+// ============================================================================
+//
+// Feature                    Display     Service(s)               Captures    Notes
+// ------------------------  ----------  ------------------------ ----------  --------------------------------
+// AI Voice Assistant         R (text)    0x08 AI Voice, 0x07 Mic  C1,C3,C5    Voice input → AI text response
+// Conversate (transcribe)    R (text)    0x0B Conversate, 0x07    C3-C6       Listening + live transcription
+// AI Agent Chat              R (text)    0x05 AI, 0x08 Voice      C2,C5       AI agent talking + text replies
+// Translator (EN→FR)         R (text)    0x05 AI (page=5)         C6 ★        Voice-to-text translate via AI svc
+// Navigation (Maps)          R (images)  0x04 Display Data (0x21) C2?         Direction arrows / turn indicators
+// Dashboard Navigation       R (scroll)  0x0E+0x01-01, 0x07      C1-C7 ★     Ring scroll + click-to-expand pages
+// Health (R1 Ring)           R (widget)  Health svc, 0x07 Dash    —           HR, SpO2, steps, sleep via Ring sensors
+// Teleprompter               R (text)    0x06 Teleprompter        C2,C3,C6    Script display + scroll control
+// Calendar                   L (dot)     0x04? Display            -           Nav dot indicator on LEFT arm
+// Silent Mode                —           0xE0 App Runtime         C4,C5       Physical touch button L+R arms
+// Notifications              R (toast)   (phone-level, minimal)   C6 ★        Double-tap to view, sub_page=3→4
+//
+// Display architecture:
+//   RIGHT arm: Primary display — text, images, scrollable lists
+//   LEFT arm:  Status indicators — navigation dots, minimal UI
+//   R1 Ring:   Scroll input — dashboard/list navigation (0x01-01 events)
+//              Health sensors — heart rate, SpO2, HRV, steps, sleep, skin temp
+//
+// ============================================================================
+// INIT SEQUENCE (observed order, t=12-23s from connect)
+// ============================================================================
+// NOTE: Capture 3 shows DOUBLE INIT at t=18s AND t=48s (BLE reconnect).
+//       All init services fire twice with identical payloads.
+// t=12.3s  0x08-01  Init Probe: type=13
+// t=12.3s  0x0D-01  Screen State: empty (home screen)
+// t=17.3s  0x80-01  Heartbeat Data: type=6 (handshake)
+// t=17.7s  0x80-00  Heartbeat: type=4 (init, LEFT arm)
+// t=18.1s  0x80-00  Heartbeat: type=4 (init, RIGHT arm)
+// t=18.2s  0x80-00  Heartbeat: type=5 (init)
+// t=18.3s  0x80-00  Heartbeat: type=128 (special init)
+// t=18.5s  0x09-00  Device Info ACK: type=1 w/ sub-field 9
+// t=18.7s  0x0D-00  Navigation Init: {f2=15}
+// t=18.7s  0x0C-00  Tasks ACK: type=2
+// t=18.8s  0x10-00  Glasses Config ACK: {f3.f1=4}
+// t=18.9s  0x91-00  Device Identity: MAC address
+// t=19.0s  0x09-00  Device Info: type=2 w/ full state (FW "2.0.7.16")
+// t=19.1s  0x81-00  Battery: 100%, charging=1
+// t=19.1s  0x20-00  Commit: {f2=23}
+// t=19.2s  0x20-00  Commit: type=1, {f4.f1=10}
+// t=19.2s  0x04-00  Display ACK: {f3.f1=1}
+// t=19.4s  0x09-00  Device Info ACK: type=1 (×2)
+// t=20.4s  0x0E-00  Display Settings: type=4 (display mode)
+// t=20.6s  0x09-01  Device State Push: first periodic
+// t=22.7s  0x01-00  General ACK: bulk ACKs (msg_ids 21→40)
+// t=25.3s  0x80-00  Heartbeat: type=6 (session established)
+//
+// COMMON ENVELOPE PATTERN:
+//   field 1 (varint) = message type / sub-command
+//   field 2 (varint) = message ID (monotonic sequence)
+//   field 3 (LEN)    = primary response payload (type=1 responses)
+//   field 4 (LEN)    = secondary payload (type=2 responses)
+//   field 5 (LEN)    = tertiary payload (type=3 responses)
+//   field 6 (LEN)    = quaternary payload (type=4 responses)
+//   Higher fields (8, 11, 13, 128) = service-specific
+//
+// ============================================================================
 
 syntax = "proto3";
 
 package even.g2;
 
-// =============================================================================
-// Transport Layer
-// =============================================================================
-
-// Not a protobuf - binary header format:
-// [0xAA] [type] [seq] [len] [pkt_tot] [pkt_ser] [svc_hi] [svc_lo] [payload] [crc16]
 
 // =============================================================================
-// Authentication Service (0x80-00, 0x80-20)
+// Enums
 // =============================================================================
 
-message AuthRequest {
-  uint32 type = 1;          // 0x04 = capability, 0x80 = time sync
+// OS-level touch/gesture event types (from SDK)
+enum OsEventType {
+  CLICK_EVENT = 0;
+  SCROLL_TOP_EVENT = 1;
+  SCROLL_BOTTOM_EVENT = 2;
+  DOUBLE_CLICK_EVENT = 3;
+  FOREGROUND_ENTER_EVENT = 4;
+  FOREGROUND_EXIT_EVENT = 5;
+  ABNORMAL_EXIT_EVENT = 6;
+}
+
+// EvenHub event types (Flutter → WebView push)
+enum EvenHubEventType {
+  EVENT_NOT_SET = 0;
+  EVENT_LIST = 1;
+  EVENT_TEXT = 2;
+  EVENT_SYS = 3;
+  EVENT_AUDIO = 4;
+}
+
+// Error codes from glasses (from SDK)
+enum EvenHubErrorCode {
+  APP_REQUEST_CREATE_PAGE_SUCCESS = 0;
+  APP_REQUEST_CREATE_INVAILD_CONTAINER = 1;
+  APP_REQUEST_CREATE_OVERSIZE_RESPONSE_CONTAINER = 2;
+  APP_REQUEST_CREATE_OUTOFMEMORY_CONTAINER = 3;
+  APP_REQUEST_UPGRADE_IMAGE_RAW_DATA_SUCCESS = 4;
+  APP_REQUEST_UPGRADE_IMAGE_RAW_DATA_FAILED = 5;
+  APP_REQUEST_REBUILD_PAGE_SUCCESS = 6;
+  APP_REQUEST_REBUILD_PAGE_FAILD = 7;
+  APP_REQUEST_UPGRADE_TEXT_DATA_SUCCESS = 8;
+  APP_REQUEST_UPGRADE_TEXT_DATA_FAILED = 9;
+  APP_REQUEST_UPGRADE_SHUTDOWN_SUCCESS = 10;
+  APP_REQUEST_UPGRADE_SHUTDOWN_FAILED = 11;
+  APP_REQUEST_UPGRADE_HEARTBEAT_PACKET_SUCCESS = 12;
+}
+
+// Mic state (confirmed from dashboard 07-00/07-01 captures)
+enum MicState {
+  MIC_STATE_UNKNOWN = 0;
+  MIC_STATE_ACTIVE = 1;     // Mic recording, audio streaming
+  MIC_STATE_STARTING = 2;   // Transitioning to active (seen in 07-00 type=1)
+  MIC_STATE_STOPPED = 3;    // Mic off, no audio
+}
+
+// App methods (from SDK bridge interface)
+enum EvenAppMethod {
+  METHOD_UNSPECIFIED = 0;
+  GET_USER_INFO = 1;
+  GET_GLASSES_INFO = 2;
+  SET_LOCAL_STORAGE = 3;
+  GET_LOCAL_STORAGE = 4;
+  CREATE_STARTUP_PAGE_CONTAINER = 5;
+  REBUILD_PAGE_CONTAINER = 6;
+  UPDATE_IMAGE_RAW_DATA = 7;
+  TEXT_CONTAINER_UPGRADE = 8;
+  AUDIO_CONTROL = 9;
+  SHUTDOWN_PAGE_CONTAINER = 10;
+}
+
+
+// =============================================================================
+// SERVICE 0x01: GENERAL / APP [app: service_id_def, common]
+// =============================================================================
+
+// 0x01-00: General ACK (glasses→phone, 11/20/27 packets)
+// Bulk ACKs during init — acknowledges multiple commands with sequential msg_ids
+// type=1: standard ACK (most packets, all with empty field 3)
+// type=6: extended ACK — f8.f1=9 (C2), f8.f1=10 (C3) — context-dependent
+message GeneralAck {
+  uint32 type = 1;                     // 1=ACK, 6=extended
   uint32 msg_id = 2;
-  AuthData data = 3;
+  GeneralAckPayload payload = 3;      // type=1: usually empty
+  GeneralAckExtended extended = 8;    // type=6: {f1=9 or f1=10}
 }
 
-message AuthData {
-  uint32 capability = 1;    // 0x01 = basic, 0x04 = full
+message GeneralAckPayload {
+  // Empty in all observed type=1 packets
 }
 
-message TimeSyncRequest {
-  uint32 type = 1;          // 0x80
+message GeneralAckExtended {
+  uint32 code = 1;                     // 9 (C2) or 10 (C3) — session context?
+}
+
+// 0x01-01: Event Stream (glasses→phone, 9/26/30/6/35/17/28 packets observed)
+// Touch/gesture events with monotonic counter. Requires active EvenHub SDK session.
+// Format: always type=3, magic=0x12345678, body has counter + event source/detail.
+//
+// FOUR event source types discovered (C1-C7):
+//
+//   source=1 (SCROLL): Ring scroll navigation between dashboard pages
+//     detail.f1=1 (input=ring), detail.f2 = scroll direction:
+//       {f1: from_page, f2: to_page} — scroll from one page to another
+//       {f2: 1}                      — scroll to home (page 1), f1 absent
+//     C7 example: 28 events showing full 5-page navigation:
+//       counter 1328: {1:3, 2:4} → scroll from page 3 to page 4
+//       counter 1329: {1:2, 2:3} → scroll from page 2 to page 3
+//       counter 1331: {2:1}      → scroll to home (page 1)
+//
+//   source=1 (DOUBLE-TAP): Gesture pair with action_code (C6 pattern)
+//     Two consecutive counters per double-tap (1312+1313, 1314+1315...)
+//     detail.f1=1, detail.f2={1:4, 2:5} = feature activation code
+//     Triggers: Notifications, Conversate, Teleprompter, Translate, Even AI
+//
+//   source=2-6 (PAGE CLICK): Click to expand a dashboard page
+//     source = page_number + 1 (source=2 → page 1 click, source=6 → page 5)
+//     Click data in field (source+1): f3=page1, f4=page2, f5=page3, f6=page4, f7=page5
+//
+//     ★ OFFICIAL DASHBOARD PAGE TYPES (from app binary PAGE_TYPE_* constants):
+//       Page 1 (source=2): PAGE_TYPE_DASHBOARD_MAIN   — home/main dashboard
+//       Page 2 (source=3): PAGE_TYPE_HEALTH_EXPANDED   — health (HR, SpO2, steps via R1 Ring)
+//       Page 3 (source=4): PAGE_TYPE_CALENDAR_EXPANDED — calendar events
+//       Page 4 (source=5): PAGE_TYPE_NEWS_EXPANDED     — news feed
+//       Page 5 (source=6): PAGE_TYPE_STOCK_EXPANDED    — stock ticker
+//       Also exists:      PAGE_TYPE_QUICKLIST_EXPANDED — quick list (position TBD)
+//
+//     C7 examples:
+//       counter 1332: source=2, f3="" → click DASHBOARD_MAIN (page 1)
+//       counter 1335: source=3, f4="" → click HEALTH_EXPANDED (page 2)
+//       counter 1338: source=4, f5="" → click CALENDAR_EXPANDED (page 3)
+//       counter 1341: source=5, f6={f4: timestamp} → click NEWS_EXPANDED (page 4)
+//       counter 1344: source=6, f7="" → click STOCK_EXPANDED (page 5)
+//       counter 1354: source=6, f7="" → click STOCK_EXPANDED (page 5, again)
+//
+//   lifecycle (2000+ range): Feature transition markers (C6 only)
+//     counters 2080-2084, f3.f1=(empty), f3.f2=(empty)
+//
+// C6 gesture pattern (5 double-taps for 5 features):
+//   t=40s:  1312+1313, 2080 → Notifications
+//   t=73s:  1314+1315, 2081 → Conversate
+//   t=136s: 1316+1317, 2082 → Teleprompter
+//   t=201s: 1318+1319, 2083 → Translate
+//   t=254s: 1320+1321, 2084 → Even AI
+//
+// C7 scroll+click pattern (dashboard navigation, 28 events):
+//   t=28-31s:  scroll pages 4→3→2→1 then click page 1
+//   t=33-37s:  scroll 1→2, click page 2
+//   t=38-44s:  scroll 2→3, click page 3, click page 4
+//   t=52-83s:  full page traversal 1↔5 with clicks
+message EventStream {
+  uint32 type = 1;                     // Always 3
+  uint64 session_id = 2;              // Always 0x12345678 (305419896)
+  EventStreamBody body = 6;
+}
+
+message EventStreamBody {
+  uint32 counter = 1;                  // Monotonic: ~1312+ (scroll/click), ~2080+ (lifecycle)
+  EventStreamEvent event = 5;
+}
+
+message EventStreamEvent {
+  uint32 source = 1;                   // 1=scroll/double-tap, 2-6=page click (page=source-1)
+  EventStreamScrollDetail detail = 2; // source=1: scroll direction or tap code
+  EventStreamLifecycle lifecycle = 3;  // 2000+ range: lifecycle markers / source=2 page1 click
+  EventStreamPageData health_page = 4;   // source=3: HEALTH_EXPANDED click (page 2)
+  EventStreamPageData calendar_page = 5; // source=4: CALENDAR_EXPANDED click (page 3)
+  EventStreamPageData news_page = 6;     // source=5: NEWS_EXPANDED click (page 4, has timestamp)
+  EventStreamPageData stock_page = 7;    // source=6: STOCK_EXPANDED click (page 5)
+  // source=2 uses field 3 (lifecycle position) for DASHBOARD_MAIN click — overloaded!
+}
+
+message EventStreamScrollDetail {
+  uint32 input_source = 1;            // 1=ring scroll/tap
+  EventStreamScrollDirection direction = 2; // scroll from/to page numbers
+}
+
+message EventStreamScrollDirection {
+  uint32 from_page = 1;               // Page scrolled FROM (absent when going to page 1)
+  uint32 to_page = 2;                 // Page scrolled TO (always present)
+}
+
+message EventStreamLifecycle {
+  // Empty in 2000+ range (feature transition markers)
+  // Also empty for source=2 page-1 clicks
+}
+
+message EventStreamPageData {
+  uint32 timestamp = 4;               // Present on page 4 clicks (e.g., 491654398), absent on others
+}
+
+// 0x01-20: Auth/Init Command (phone→glasses, write-only)
+// Sent during session init handshake
+message AuthCommand {
+  uint32 type = 1;
   uint32 msg_id = 2;
-  TimeSyncData sync = 16;   // Field 16 (0x82 0x08)
+  AuthPayload auth = 3;
 }
 
-message TimeSyncData {
-  uint32 unknown1 = 2;      // Always 17 (0x11)?
-  uint64 timestamp = 1;     // Unix timestamp (varint)
-  int64 transaction_id = 2; // Usually -24 (0xFFFFFFFFFFFFFFE8)
+message AuthPayload {
+  uint32 capability = 1;              // 0x01=basic, 0x04=full
 }
 
+
 // =============================================================================
-// Teleprompter Service (0x06-20)
+// SERVICE 0x03: NOTIFICATIONS [app: NotificationDataPackage, eNotificationCommandId]
 // =============================================================================
 
+// 0x03-00: Notification ACK (glasses→phone, 3 packets observed)
+// Init sequence ACKs. NOTE: uses field 4 (not field 3) for payload
+message NotificationAck {
+  uint32 type = 1;                     // Always 1
+  uint32 msg_id = 2;
+  NotificationAckPayload payload = 4; // NOTE: field 4, not 3
+}
+
+message NotificationAckPayload {
+  // Empty in all observed packets
+}
+
+// 0x03-20: Notification Push (phone→glasses, write-only)
+// Push notification metadata to glasses display
+message NotificationPush {
+  uint32 type = 1;
+  uint32 msg_id = 2;
+  NotificationData notification = 3;
+}
+
+message NotificationData {
+  uint32 app_id = 1;                  // e.g., 0x1A = Gmail
+  uint32 count = 2;                   // Number of notifications
+}
+
+
+// =============================================================================
+// SERVICE 0x04: DISPLAY / EVENHUB [app: evenhub_main_msg_ctx, EvenHub_Cmd_List]
+// =============================================================================
+// Features: Teleprompter text, Navigation app direction images (0x04-21),
+//           Calendar nav dot on LEFT arm, wake/sleep control.
+//           Navigation app renders turn-by-turn direction indicator images
+//           on the RIGHT display. Calendar shows minimal dot indicator on LEFT.
+
+// 0x04-00: Display ACK (glasses→phone, 1 packet observed)
+// Response to display wake/content commands
+// Observed: {1:1, 2:25, 3:{1:1}}
+message DisplayAck {
+  uint32 type = 1;                     // 1
+  uint32 msg_id = 2;
+  DisplayAckPayload payload = 3;
+}
+
+message DisplayAckPayload {
+  uint32 status = 1;                   // 1 = success
+}
+
+// 0x04-20: Display Command (phone→glasses, write-only)
+// Used for display wake, teleprompter content, page management
+// See Container Messages section below for payload formats
+message DisplayWake {
+  uint32 type = 1;                     // 1
+  uint32 msg_id = 2;
+  DisplayWakeSettings settings = 3;
+}
+
+message DisplayWakeSettings {
+  uint32 field1 = 1;                   // 1
+  uint32 field2 = 2;                   // 1
+  uint32 field3 = 3;                   // 5
+  uint32 field5 = 5;                   // 1
+}
+
+
+// =============================================================================
+// SERVICE 0x05: EVEN AI / TRANSLATE [app: EvenAIDataPackage, TranslateDataPackage]
+// =============================================================================
+// Features: AI Agent chat (text response on RIGHT display),
+//           translator (EN→FR voice-to-text) ★ confirmed C6.
+//           Translate mode: screen page=5, 05-01 start/stop, 05-00 heartbeats.
+//           The AI agent responds to voice queries with text displayed on R.
+//           C6 timeline: 05-01 f5={1:1} start → 05-00 heartbeats → 05-01 f5={1:2} stop.
+
+// 0x05-00: AI Heartbeat (glasses→phone, 12/6/8 packets)
+// Periodic keep-alive during active AI/Translate session (~3s interval)
+// Always type=162 with empty f7. msg_ids sequential.
+// C2: 104→121 between mic-on/AI-end. C6: 115→124 during translate (213-225s).
+// Correlates 1:1 with 0x0D-01 f3.f1=5 (AI/Translate screen active).
+message AIHeartbeat {
+  uint32 type = 1;                     // Always 162 (0xA2)
+  uint32 msg_id = 2;                  // Sequential: 104→121
+  AIHeartbeatPayload keepalive = 7;   // Always empty
+}
+
+message AIHeartbeatPayload {
+  // Empty in all 12 observed packets — pure keep-alive signal
+}
+
+// 0x05-01: AI State Push (glasses→phone, 5/2/2 packets)
+// Session lifecycle events for AI/speech/translate processing:
+//   type=161: Session control — f5.f1=1 (start), f5.f1=2 (end/stop)
+//   type=163: Processing state — f6.f1=1 (processing), f6=(empty) (idle)
+//
+// C2 timeline (AI agent chat):
+//   t=122s  type=161 f5.f1=1  → AI session START
+//   t=145s  type=163 f6.f1=1  → AI processing active
+//   t=146s  type=163 f6=(empty) → AI processing idle
+//   t=147s  type=163 f6.f1=1  → AI processing active again
+//   t=156s  type=161 f5.f1=2  → AI session STOP
+//
+// C6 timeline (Translate EN→FR):
+//   t=213.5s type=161 f5.f1=1  → Translate session START
+//   t=224.8s type=161 f5.f1=2  → Translate session STOP
+//   (No type=163 processing events — simpler session than AI agent chat)
+message AIStatePush {
+  uint32 type = 1;                     // 161 (0xA1) or 163 (0xA3)
+  uint32 msg_id = 2;
+  AISessionControl session = 5;       // type=161: start/stop
+  AIProcessingState processing = 6;   // type=163: active/idle
+}
+
+message AISessionControl {
+  uint32 state = 1;                    // 1=start, 2=stop
+}
+
+message AIProcessingState {
+  uint32 active = 1;                   // 1=processing, absent/0=idle
+}
+
+
+// =============================================================================
+// SERVICE 0x06: TELEPROMPTER [app: TelepromptDataPackage, TelepromptCommandId]
+// =============================================================================
+
+// 0x06-00: Teleprompter Heartbeat (glasses→phone, 8 packets) ★ NEW
+// Periodic keep-alive during active teleprompter session (~6s interval)
+// Always type=166 with empty f12. msg_ids 61→72.
+// Active from t=48s (teleprompter open) to t=74s (teleprompter close).
+message TeleprompterHeartbeat {
+  uint32 type = 1;                     // Always 166 (0xA6)
+  uint32 msg_id = 2;                  // Sequential: 61→72
+  TeleprompterHeartbeatPayload keepalive = 12; // Always empty
+}
+
+message TeleprompterHeartbeatPayload {
+  // Empty in all 8 observed packets — pure keep-alive signal
+}
+
+// 0x06-01: Teleprompter Response (glasses→phone, 9/6 packets) ★ NEW
+// Unsolicited feedback from glasses during teleprompter session.
+// 5 sub-types map to session lifecycle phases:
+//
+//   type=161: Session end    — f7.f1=4 (complete/close)
+//   type=162: Session start  — f8=(empty) (ACK, teleprompter opened)
+//   type=163: Script loaded  — f9.f1="teleprompt_createdId_XXXXXX" ★ SCRIPT ID!
+//   type=164: Content ready  — f10=(empty) or f10.f1=1 (pages loaded)
+//   type=165: Scroll/page    — f11.f2=N (current page/scroll position)
+//
+// C2 timeline (first teleprompter session):
+//   t=48.0s  type=162 f8=(empty)    → teleprompter opened
+//   t=50.2s  type=163 f9.f1="..."   → script loaded
+//   t=50.3s  type=164 f10=(empty)   → content loading
+//   t=50.5s  type=164 f10.f1=1      → content ready
+//   t=63.4s  type=165 f11.f2=1      → user at page 1
+//   t=63.8s  type=165 f11.f2=4      → scrolled to page 4
+//   t=71.1s  type=165 f11.f2=5      → scrolled to page 5
+//   t=71.5s  type=165 f11.f2=8      → scrolled to page 8
+//   t=76.5s  type=161 f7.f1=4       → session closed
+//
+// C6 timeline (second teleprompter session, same script):
+//   t=114.4s type=162 f8=(empty)    → teleprompter opened
+//   t=139.4s type=162 f8=(empty)    → re-open (after brief exit?)
+//   t=141.8s type=163 f9="teleprompt_createdId_1771967904374" ★ same ID
+//   t=141.9s type=164 f10=(empty)   → content loading
+//   t=142.0s type=164 f10.f1=1      → content ready
+//   t=149.6s type=161 f7.f1=4       → session closed
+message TeleprompterResponse {
+  uint32 type = 1;                     // 161-165
+  uint32 msg_id = 2;
+  TeleprompterEndPayload end = 7;     // type=161: session close
+  TeleprompterStartAck start = 8;     // type=162: session open ACK
+  TeleprompterScriptLoaded script = 9; // type=163: script ID ★
+  TeleprompterContentReady content = 10; // type=164: content state
+  TeleprompterScrollState scroll = 11;  // type=165: scroll position
+}
+
+message TeleprompterEndPayload {
+  uint32 reason = 1;                   // 4 = normal close
+}
+
+message TeleprompterStartAck {
+  // Empty — just confirms teleprompter UI opened
+}
+
+message TeleprompterScriptLoaded {
+  string script_id = 1;               // e.g., "teleprompt_createdId_1771967904374"
+}
+
+message TeleprompterContentReady {
+  uint32 ready = 1;                    // 1 = all pages loaded, absent = loading
+}
+
+message TeleprompterScrollState {
+  uint32 page = 2;                     // Current page/scroll position: 1,4,5,8 observed
+}
+
+// 0x06-20: Teleprompter Command (phone→glasses, write-only)
+// Confirmed working in teleprompter_v2.py
 message TeleprompterMessage {
-  uint32 type = 1;          // 1=init, 2=list, 3=content, 4=complete, 255=marker
+  uint32 type = 1;                     // 1=init, 2=list, 3=content, 4=complete, 255=marker
   uint32 msg_id = 2;
-
-  // One of the following based on type:
-  TeleprompterInit init = 3;           // type=1
-  TeleprompterList list = 4;           // type=2
-  TeleprompterContent content = 5;     // type=3
-  TeleprompterComplete complete = 6;   // type=4
-  TeleprompterMarker marker = 13;      // type=255
+  TeleprompterInit init = 3;          // type=1
+  TeleprompterList list = 4;          // type=2
+  TeleprompterContent content = 5;    // type=3
+  TeleprompterComplete complete = 6;  // type=4
+  TeleprompterMarker marker = 13;     // type=255
 }
 
 message TeleprompterInit {
@@ -63,15 +619,15 @@ message TeleprompterInit {
 }
 
 message TeleprompterDisplaySettings {
-  uint32 field1 = 1;            // Always 1
-  uint32 field2 = 2;            // Always 0
-  uint32 field3 = 3;            // Always 0
-  uint32 display_width = 4;     // 267
-  uint32 content_height = 5;    // Total content height (affects scroll bar)
-  uint32 line_height = 6;       // 230
-  uint32 viewport_height = 7;   // 1294 (visible area)
-  uint32 font_size = 8;         // 5
-  uint32 scroll_mode = 9;       // 0=manual, 1=AI
+  uint32 field1 = 1;                   // Always 1
+  uint32 field2 = 2;                   // Always 0
+  uint32 field3 = 3;                   // Always 0
+  uint32 display_width = 4;           // 267
+  uint32 content_height = 5;          // Total content height
+  uint32 line_height = 6;             // 230
+  uint32 viewport_height = 7;         // 1294 (visible area)
+  uint32 font_size = 8;               // 5
+  uint32 scroll_mode = 9;             // 0=manual, 1=AI
 }
 
 message TeleprompterList {
@@ -79,132 +635,1092 @@ message TeleprompterList {
 }
 
 message TeleprompterScript {
-  string script_id = 1;     // e.g., "teleprompter_createdId_1766814694346"
-  string title = 2;         // e.g., "Teleprompt Title"
+  string script_id = 1;               // e.g., "teleprompter_createdId_1766814694346"
+  string title = 2;
 }
 
 message TeleprompterContent {
-  uint32 page_number = 1;   // 0-indexed
-  uint32 line_count = 2;    // Always 10
-  bytes text = 3;           // UTF-8 with \n separators
+  uint32 page_number = 1;             // 0-indexed
+  uint32 line_count = 2;              // Always 10
+  bytes text = 3;                      // UTF-8 with \n separators
 }
 
 message TeleprompterComplete {
-  uint32 start_page = 1;    // Always 0
+  uint32 start_page = 1;              // Always 0
   uint32 total_pages = 2;
   uint32 total_lines = 3;
 }
 
 message TeleprompterMarker {
-  uint32 field1 = 1;        // Always 0
-  uint32 field2 = 2;        // Always 6
+  uint32 field1 = 1;                   // Always 0
+  uint32 field2 = 2;                   // Always 6
 }
 
-// Start command (type=1 with state)
 message TeleprompterStart {
-  uint32 type = 1;          // 1
+  uint32 type = 1;                     // 1
   uint32 msg_id = 2;
-  TeleprompterState state = 3;
+  TeleprompterStartPayload state = 3;
 }
 
-message TeleprompterState {
-  uint32 state = 1;         // 4 = START
+message TeleprompterStartPayload {
+  uint32 state = 1;                    // 4 = START
 }
 
-// =============================================================================
-// Display Config Service (0x0E-20)
-// =============================================================================
 
-message DisplayConfig {
-  uint32 type = 1;          // 2
-  uint32 msg_id = 2;
-  DisplaySettings settings = 4;
+// =============================================================================
+// SERVICE 0x07: DASHBOARD [app: DashboardDataPackage, eDashboardCommandId]
+// =============================================================================
+// Features: Main dashboard with scrollable navigation on RIGHT display.
+//           R1 Ring scroll input generates 0x01-01 Event Stream gestures
+//           (scroll_position 0-4) for navigating dashboard items.
+//           Mic trigger for voice commands + AI processing.
+
+// 0x07-00: Dashboard ACK (glasses→phone, 33/26/29/21 packets — very active)
+// Multi-type message with 8 confirmed sub-types:
+//   type=1:  Mic state change — f3.f1=2(starting), f3.f1=3(stopped)
+//   type=3:  Empty ACK — most common, sent during audio streaming
+//   type=4:  Empty f6 — transitional (mic→streaming boundary)
+//   type=5:  Display render complete — f7=(empty)
+//   type=7:  Session result — f9.f1=5 ★ NEW (C4, at end of mic session)
+//   type=9:  Post-mic-activate — f11.f1=1 (mic hardware ready)
+//   type=10: Dashboard heartbeat — f13.f2=32 (counter variant) or f13=(empty)
+//
+// Capture 2 type=5 appears in triplets between audio streaming blocks:
+//   t=98.7-98.9s (×3), t=105.7-105.8s (×3), t=111.7-111.9s (×1)
+// Capture 4 type=7 f9.f1=5 at t=196.5s (mic session end, before 07-01 mic-off)
+message DashboardAck {
+  uint32 type = 1;                     // 1, 3, 4, 5, 7, 9, 10
+  uint32 msg_id = 2;                  // Sequential 17→107
+  DashboardAckMic mic = 3;            // type=1
+  DashboardAckType5 render = 5;       // type=3 ACK (empty)
+  DashboardAckType4 type4_data = 6;   // type=4
+  DashboardAckRender display = 7;     // type=5: display render complete
+  DashboardAckResult result = 9;      // type=7: session result ★ NEW (C4)
+  DashboardAckReady ready = 11;       // type=9
+  DashboardAckHeartbeat heartbeat = 13; // type=10
 }
 
-message DisplaySettings {
-  uint32 enabled = 1;
-  repeated DisplayRegion regions = 2;
-  uint32 field3 = 3;
+message DashboardAckMic {
+  MicState state = 1;                  // 2=starting, 3=stopped
 }
 
-message DisplayRegion {
-  uint32 region_id = 1;     // 2, 3, 4, 5, 6
-  uint32 param1 = 2;        // Varies
-  float param2 = 3;         // Float (IEEE 754)
-  float param3 = 4;         // Float
-  uint32 param4 = 5;        // 0
-  uint32 param5 = 6;        // 0
+message DashboardAckType5 {
+  // Empty — streaming ACK (type=3)
 }
 
-// =============================================================================
-// Sync Service (0x80-00)
-// =============================================================================
-
-message SyncMessage {
-  uint32 type = 1;          // 0x0E = sync trigger
-  uint32 msg_id = 2;
-  bytes data = 13;          // Empty (6A-00)
+message DashboardAckType4 {
+  // Empty in observed packets — transitional
 }
 
-// =============================================================================
-// Dashboard Service (0x07-20)
-// =============================================================================
+message DashboardAckRender {
+  // Empty — signals display render complete (type=5)
+}
 
-message DashboardMessage {
+message DashboardAckResult {
+  uint32 status = 1;                   // 5 observed — session result at mic end (type=7)
+}
+
+message DashboardAckReady {
+  uint32 status = 1;                   // 1 = mic hardware ready
+}
+
+message DashboardAckHeartbeat {
+  uint32 counter = 2;                  // 32 observed (absent in some packets)
+}
+
+// 0x07-01: Mic/AI State Push (glasses→phone, 4/4/6/3/0/2 packets)
+// Unsolicited state notifications, RIGHT arm only.
+// Two sub-types:
+//   type=1: Mic on/off — f3.f1=1(on), f3.f1=3(off)
+//           Perfectly correlates with audio stream start/stop on 0x6402 LEFT arm
+//   type=8: AI processing state — f10.f1=2 ★ NEW
+//           Appears during active AI session, between mic-on and mic-off
+//           Capture 2: t=100.1s and t=106.9s (during speech recognition)
+//
+// C6 mic session (t=260-272s):
+//   t=260.7s type=1 f3.f1=1  → MIC ON  (audio starts on LEFT arm)
+//   t=271.9s type=1 f3.f1=3  → MIC OFF (audio stops, ~11s session)
+message MicStatePush {
+  uint32 type = 1;                     // 1=mic, 8=AI processing
+  uint32 msg_id = 2;                  // Sequential
+  MicStatePushPayload state = 3;      // type=1
+  MicAIProcessing ai_state = 10;      // type=8
+}
+
+message MicStatePushPayload {
+  MicState mic_state = 1;             // 1=active, 3=stopped
+}
+
+message MicAIProcessing {
+  uint32 state = 1;                    // 2 = AI processing active
+}
+
+// 0x07-20: Dashboard Command (phone→glasses, write-only)
+// Text display on glasses, mic control commands
+message DashboardCommand {
   uint32 type = 1;
   uint32 msg_id = 2;
   DashboardWidget widget = 3;
 }
 
 message DashboardWidget {
-  uint32 widget_type = 1;   // Calendar, weather, etc.
-  bytes content = 2;        // Widget-specific data
+  uint32 widget_type = 1;
+  bytes content = 2;
 }
 
+
 // =============================================================================
-// Display Wake Service (0x04-20)
+// SERVICE 0x08: AI VOICE SESSION [app: EvenAIDataPackage extended session]
+// =============================================================================
+// Features: AI Voice Assistant — voice input → AI text response on RIGHT.
+//           Also handles translator (EN→FR voice-to-text) sessions.
+//           Full lifecycle: init → screen context → mic → token stream → teardown.
+// Previously "Init Probe" (1 packet in C1). Capture 3 reveals full AI voice
+// session protocol with 38+15 packets. Service handles end-to-end AI voice
+// interaction: init → screen context → mic → token streaming → teardown.
+
+// 0x08-00: AI Voice Session ACK (glasses→phone, 38 packets) ★ NEW
+// Phone→glasses response/ack during active AI voice session.
+// Active from t=199s to t=245s (entire AI voice flow).
+//
+// Sub-types by field 1:
+//   type=1:  Session init ACK — f3=(empty)
+//   type=7:  Render heartbeat — f5=(empty), ~1s interval during AI text display
+//   type=8:  Token ACK / status — f9={1:1} (token received, ~0.5s burst)
+//                                  f6=(empty) (processing status)
+//   (none):  Simple ACK — no type field, f2+f3=(empty) only
+//
+// Timeline (capture 3, t=199-245s):
+//   t=199.4s type=1    → Session ACK
+//   t=203-214s (none)  → Simple ACKs interspersed
+//   t=214-219s type=8  → Token received burst (f9={1:1} at ~0.5s)
+//   t=220-245s type=7  → Render HB (~1s while displaying AI response)
+//   t=220-244s (none)  → Simple ACKs interspersed with type=7
+message AIVoiceSessionAck {
+  uint32 type = 1;                     // 1, 7, 8, or absent
+  uint32 msg_id = 2;                  // Sequential: 147→203
+  AIVoiceAckPayload ack = 3;          // type=1 or no-type: (empty)
+  AIVoiceRenderHB render = 5;         // type=7: render heartbeat (empty)
+  AIVoiceStatusAck status = 6;        // type=8: processing status (empty)
+  AIVoiceTokenAck token_ack = 9;      // type=8: token received {f1=1}
+}
+
+message AIVoiceAckPayload {
+  // Empty in all observed packets — simple ACK
+}
+
+message AIVoiceRenderHB {
+  // Empty — signals AI text rendering active on display (~1s interval)
+}
+
+message AIVoiceStatusAck {
+  // Empty — processing status ack
+}
+
+message AIVoiceTokenAck {
+  uint32 received = 1;                // 1 = token received successfully
+}
+
+// 0x08-01: AI Voice Session Push (glasses→phone, 1/15/7 packets)
+// Glasses-initiated AI voice session lifecycle. Full lifecycle in C3.
+// C5 confirms shorter sessions: init → context → tokens → teardown (no mic/phase).
+//
+//   type=1:  Session init — f3=(empty) (first packet in session)
+//   type=4:  Screen context — f8 contains current app name ("Home") + page
+//            f8.f1 bytes decode as "Home" ASCII (0x486F6D65)
+//            f8.f4=page (1 in C5, 2 in C3) — varies by session context
+//   type=13: Session teardown — f3=(empty) (last packet, was sole C1 packet)
+//   type=14: Mic state — f9.f1=2(mic opened), f9.f1=1(mic closed)
+//   type=15: Token streaming — f10.f1=N (AI response token IDs)
+//            C3: 3, 21, 14, 331, 52, 61, 23, 31 (at ~1s intervals)
+//            C5: 90, 1, 348, 356 (at ~1-2s intervals, shorter session)
+//   type=16: Phase A start — f3=(empty) (not in C5 — optional)
+//   type=17: Phase B start — f3=(empty) (not in C5 — optional)
+//
+// C5 timeline (t=129-165s, shorter than C3):
+//   t=129.2s type=1   → session init
+//   t=132.5s type=4   → current screen "Home" (page=1)
+//   t=132.9s type=15  → token 90
+//   t=133.9s type=15  → token 1
+//   t=137.9s type=15  → token 348
+//   t=138.9s type=15  → token 356
+//   t=165.5s type=13  → session teardown
+//
+// Note: types 14, 16, 17 (mic state, phase markers) are optional.
+// C5 went directly from context → tokens → teardown without mic/phase events.
+message AIVoiceSessionPush {
+  uint32 type = 1;                     // 1, 4, 13, 14, 15, 16, 17
+  AIVoiceSessionPayload payload = 3;  // types 1,13,16,17: (empty)
+  AIVoiceScreenContext screen = 8;    // type=4: current screen info
+  AIVoiceMicState mic = 9;           // type=14: mic open/close
+  AIVoiceToken token = 10;           // type=15: AI response token ★
+}
+
+message AIVoiceSessionPayload {
+  // Empty — used by types 1 (init), 13 (teardown), 16/17 (phase start)
+}
+
+message AIVoiceScreenContext {
+  AIVoiceScreenName name = 1;        // Contains app name bytes ("Home")
+  uint32 page = 4;                    // 1=home (C5), 2=home (C3) — varies
+}
+
+message AIVoiceScreenName {
+  // Protobuf decoder sees nested fields due to "Home" bytes (0x486F6D65)
+  // being valid protobuf wire format. Actual content is string "Home".
+  // f9=111 (0x6F='o') is an artifact of nested decode.
+  uint32 name_bytes = 9;              // 111 = 0x6F, artifact of "Home" decode
+}
+
+message AIVoiceMicState {
+  uint32 state = 1;                    // 2=mic opened, 1=mic closed
+}
+
+message AIVoiceToken {
+  uint32 token_id = 1;                // AI response token/word ID
+  // Values: 3, 21, 14, 331, 52, 61, 23, 31 (appear to be word indices)
+}
+
+
+// =============================================================================
+// SERVICE 0x09: DEVICE INFO / STATE [app: dev_infomation, dev_settings]
 // =============================================================================
 
-message DisplayWake {
-  uint32 type = 1;          // 1
+// 0x09-00: Device Info ACK (glasses→phone, 4/35 packets)
+// Init: type=1 ACK(f3.f9.f5=1) + type=2 full state
+// Late session: Settings feedback via type=1 with varied f3 sub-fields:
+//   f3.f1.f2=N:  Volume changed (values: 24,32,38,48 observed)
+//   f3.f2.f1=N:  Brightness changed (values: 2→12, cycling up/down)
+//   f3.f2=(empty): Brightness reset/default
+//   f3.f3.f1=N:  Notification setting (1=on, 2=off?)
+//   f3.f3=(empty): Notification default
+//   f3.f6=(empty): Display settings response (rare)
+//   f3.f9.f5=1:  Standard ACK (init phase)
+//
+// Capture 2 late-session settings sequence (t=170-210s):
+//   t=170s  f3.f6=(empty)      — display settings ACK
+//   t=174s  f3.f1.f2=48        — volume set to 48
+//   t=177s  f3.f1.f2=32        — volume set to 32
+//   t=179s  f3.f1.f2=24        — volume set to 24
+//   t=181s  f3.f1.f2=38        — volume set to 38
+//   t=185s  f3.f2.f1=8→f1=12  — brightness cycling up
+//   t=189s  f3.f2.f1=10→f1=2  — brightness cycling down
+//   t=199s  f3.f3.f1=2, f3.f3.f1=1 — notification toggle
+message DeviceInfoAck {
+  uint32 type = 1;                     // 1=ACK/settings, 2=full state
   uint32 msg_id = 2;
-  DisplayWakeSettings settings = 3;
+  DeviceInfoAckPayload payload = 3;   // type=1: varied sub-fields
+  DeviceState state = 4;              // type=2: full device state
 }
 
-message DisplayWakeSettings {
-  uint32 field1 = 1;        // 1
-  uint32 field2 = 2;        // 1
-  uint32 field3 = 3;        // 5
-  uint32 field5 = 5;        // 1
+message DeviceInfoAckPayload {
+  DeviceVolumeChange volume = 1;      // f1.f2=N when volume changes
+  DeviceBrightnessChange brightness = 2; // f2.f1=N when brightness changes
+  DeviceNotificationChange notification = 3; // f3.f1=N for notification setting
+  DeviceDisplaySettingsAck display = 6;  // f6=(empty) display settings ACK
+  DeviceInfoAckSub sub = 9;           // f9.f5=1 standard ACK (init)
 }
 
+message DeviceVolumeChange {
+  uint32 level = 2;                    // Volume level: 24, 32, 38, 48 observed
+}
+
+message DeviceBrightnessChange {
+  uint32 level = 1;                    // Brightness: 2-12 observed, 0=default
+}
+
+message DeviceNotificationChange {
+  uint32 state = 1;                    // 1=enabled?, 2=disabled?
+}
+
+message DeviceDisplaySettingsAck {
+  // Empty — acknowledges display settings change
+}
+
+message DeviceInfoAckSub {
+  uint32 status = 5;                   // 1 = success
+}
+
+// 0x09-01: Device State Push (glasses→phone, 10/26 packets)
+// Periodic device state reports — firmware, battery, volume, brightness
+// Three sub-types:
+//   type=2: Full state (majority) — rich device info including FW version
+//   type=3: Brief status (2-3 packets) — {f5.f2=0 or 1}
+// msg_ids in 1003-1045 range (glasses-initiated, high sequence numbers)
+// Interval: variable (~5-20s), RIGHT arm only
+//
+// Late-session state reflection (capture 2, t=166-210s):
+//   State.f2 (brightness) changes: 60 → 48 → 38 at volume/brightness changes
+//   State.f3 (fw_minor) changes: 7 → 11 → 12 → 3 (reflects brightness settings)
+//   State.f4 (field4) changes: 1 → 2 when notification settings toggle
+message DeviceStatePush {
+  uint32 type = 1;                     // 2=full, 3=brief
+  uint32 msg_id = 2;                  // 1003→1012 (glasses-initiated)
+  DeviceState state = 4;              // type=2
+  DeviceStateBrief brief = 5;         // type=3
+}
+
+// Full device state (shared by 0x09-00 type=2 and 0x09-01 type=2)
+// Contains firmware version string "2.0.7.16" embedded in raw bytes
+message DeviceState {
+  uint32 field1 = 1;                   // Present in some (value=1)
+  uint32 brightness = 2;              // Display brightness: 45, 35 observed
+  uint32 firmware_minor = 3;          // 7 (matches "2.0.7.16")
+  uint32 field4 = 4;                   // Always 1
+  DeviceVersionWrapper fw_left = 5;   // Left arm firmware info
+  DeviceVersionWrapper fw_right = 6;  // Right arm firmware info
+  uint32 field7 = 7;                   // Always 1
+  uint32 volume = 8;                   // 30 observed
+  uint32 field10 = 10;                // Always 1
+  uint32 auto_brightness = 11;        // 1 (present in some packets, not others)
+  uint32 battery_percent = 12;        // 100 observed (0-100)
+  uint32 field18 = 18;                // Always 1
+  // NOTE: Raw protobuf also contains firmware string bytes for "2.0.7.16"
+  //       at nested positions within fields 5 and 6
+}
+
+message DeviceVersionWrapper {
+  DeviceVersionInner inner = 6;
+}
+
+message DeviceVersionInner {
+  uint32 build_number = 6;            // 46 observed
+}
+
+message DeviceStateBrief {
+  uint32 status = 2;                   // 0 or 1
+}
+
+
 // =============================================================================
-// Conversate Service (0x0B-20)
+// SERVICE 0x0B: CONVERSATE [app: ConversateDataPackage, ConversateCommandId]
+// =============================================================================
+// Features: Conversate (live transcription/listening+redacting on RIGHT),
+//           Translator (EN→FR voice-to-text). Displays real-time transcribed
+//           text on the RIGHT display during voice sessions.
+// Third feature-specific heartbeat+state service (alongside 0x05 AI, 0x06 Teleprompter).
+// Active during Conversate (long-form conversation) sessions, t=131-155s.
+// Same type code patterns: 162 (0xA2) heartbeat, 161 (0xA1) state push.
+
+// 0x0B-00: Conversate Heartbeat (glasses→phone, 39 packets) ★ NEW
+// Rapid keep-alive during active Conversate session (~0.5s interval).
+// Always type=162 with empty f9. msg_ids 90→131 (some gaps).
+// Correlates with 0x0D-01 f3.f1=11 (Conversate screen active).
+//
+// Timing: t=131.77s to t=155.01s (~23s active window)
+// Bracketed by 0x0B-01 state pushes (start=131.57s, end=154.71s)
+message ConversateHeartbeat {
+  uint32 type = 1;                     // Always 162 (0xA2)
+  uint32 msg_id = 2;                  // Sequential: 90→131
+  ConversateHeartbeatPayload keepalive = 9; // Always empty
+}
+
+message ConversateHeartbeatPayload {
+  // Empty in all 39 observed packets — pure keep-alive signal
+  // NOTE: uses field 9, unlike AI (field 7) and Teleprompter (field 12)
+}
+
+// 0x0B-01: Conversate State Push (glasses→phone, 2 packets) ★ NEW
+// Session lifecycle events — same pattern as AIStatePush (0x05-01).
+// Type=161 (0xA1) with f8.f1 = state code.
+//
+// Timeline (capture 3):
+//   t=131.57s  type=161 f8.f1=1  → Conversate session START (msg_id=1)
+//   t=154.71s  type=161 f8.f1=2  → Conversate session END  (msg_id=130)
+message ConversateStatePush {
+  uint32 type = 1;                     // Always 161 (0xA1)
+  uint32 msg_id = 2;                  // 1 (start) → 130 (end)
+  ConversateSessionState session = 8; // f8.f1 = state
+}
+
+message ConversateSessionState {
+  uint32 state = 1;                    // 1=start, 2=end
+}
+
+
+// =============================================================================
+// SERVICE 0x0C: QUICKLIST / TASKS [app: QuicklistDataPackage, eQuicklistCommandId]
 // =============================================================================
 
-message ConversateMessage {
-  uint32 type = 1;
+// 0x0C-00: Tasks ACK (glasses→phone, 1/1/8 packets)
+// Three sub-types confirmed in capture 3:
+//   type=1: Task detail — f3.f1=task_id (uint32), f3.f2=confirmed (1)
+//   type=2: Task list ACK — f4.f1=1 (success), optional f4.f2=1 (has tasks)
+//
+// Capture 3 timeline:
+//   t=18-49s   type=2 f4={1:1}      — init task list (×4, incl double init)
+//   t=97.5s    type=1 f3={1:491654398, 2:1} — task 0x1D56197E confirmed
+//   t=97.9-100s type=2 f4={1:1, 2:1} — task list with confirmed flag
+message TasksAck {
+  uint32 type = 1;                     // 1=detail, 2=list
   uint32 msg_id = 2;
-  ConversateTranscript transcript = 7;  // Field 7
+  TaskDetailPayload detail = 3;       // type=1: specific task info
+  TasksAckPayload payload = 4;        // type=2: list ACK (field 4, not 3)
 }
 
-message ConversateTranscript {
-  string text = 1;          // Transcribed text
-  bool is_final = 2;        // True if final result
+message TaskDetailPayload {
+  uint32 task_id = 1;                  // e.g., 491654398 (0x1D56197E)
+  uint32 confirmed = 2;               // 1 = task confirmed/acknowledged
 }
 
-// =============================================================================
-// Notification Service (0x02-20)
-// =============================================================================
+message TasksAckPayload {
+  uint32 status = 1;                   // 1 = success
+  uint32 has_tasks = 2;               // 1 = tasks present (C3), absent in init
+}
 
-message NotificationMessage {
-  uint32 type = 1;
+
+// =============================================================================
+// SERVICE 0x??: HEALTH [app: HealthDataPackage, eHealthCommandId]
+// =============================================================================
+// NOT YET CAPTURED — service ID unknown, never seen in 7 captures.
+// Health = dashboard page 2 (PAGE_TYPE_HEALTH_EXPANDED), monitors vitals via R1 Ring.
+//
+// Data flow: R1 Ring BLE sensors → glasses → phone app → cloud API
+//   Ring sends: heart rate, SpO2 (blood oxygen), HRV, steps, calories, sleep, skin temp
+//   Phone sends TO glasses: HealthDataPackage with highlights for dashboard display
+//
+// App binary proto messages:
+//   HealthDataPackage              — wrapper envelope (standard service_id + cmd_id + data)
+//   HealthDataPackage_CommandData  — command data sub-message
+//   HealthMultData                 — batch of multiple health metrics
+//   HealthMultHighlight            — batch of highlight cards (dashboard summary)
+//   HealthSingleData               — single metric update (one reading)
+//   HealthSingleHighlight          — single highlight card
+//
+// App binary enums:
+//   eHealthCommandId               — command types (unknown values)
+//   eHealthDataType                — metric types: HEART_RATE, BLOOD_OXYGEN, STEPS, SLEEP, etc.
+//   eHealthDataTrend               — trend: health_high, health_low, health_normal, health_very_low
+//
+// Send methods (phone→glasses):
+//   ProtoHealthExt|sendHealthSingle        — push single metric reading
+//   ProtoHealthExt|sendHealthMult          — push batch of metrics
+//   ProtoHealthExt|sendHealthHighlightMult — push highlight cards for dashboard
+//   ProtoHealthExt|sendDashboardSnapshot   — push full dashboard health summary
+//
+// Dashboard widget strings:
+//   os_dashboard_health_bpm, os_dashboard_health_steps, os_dashboard_health_calories,
+//   os_dashboard_health_avg, os_dashboard_health_productivity_score
+//
+// Health icons: heart_rate, blood_oxygen, hrv, sleep, temperature, walk, run, stand, lift
+//
+// Ring data models (even_connect/ring1/models/health/):
+//   BleRing1HealthPoint            — single sensor reading (HR/SpO2)
+//   BleRing1HealthActivityDaily    — daily activity summary (steps, calories)
+//   BleRing1HealthSleep            — sleep data with stage classification
+//
+// Cloud API: /v2/g/health/{push, get_latest_data, query_window, batch_query_window,
+//            get_info, update_info, export, get_pkey}
+//
+// TODO: Capture BLE traffic while Health page is active to discover service ID
+
+// Placeholder messages (structure from app binary naming):
+message HealthDataPackage {
+  uint32 type = 1;                     // eHealthCommandId value
   uint32 msg_id = 2;
-  NotificationData notification = 3;
+  HealthCommandData data = 3;
 }
 
-message NotificationData {
-  uint32 app_id = 1;        // e.g., 0x1A = Gmail
-  uint32 count = 2;         // Number of notifications
-  // NOTE: No text content - only metadata
+message HealthCommandData {
+  // Unknown field layout — needs capture data
+}
+
+message HealthSingleData {
+  // Single metric: one heart rate reading, one SpO2 value, etc.
+}
+
+message HealthSingleHighlight {
+  // Single highlight card for dashboard display
+}
+
+message HealthMultData {
+  // Batch of metric readings
+}
+
+message HealthMultHighlight {
+  // Batch of highlight cards for dashboard summary
+}
+
+
+// =============================================================================
+// SERVICE 0x??: RING [app: RingDataPackage, eRingCommandId]
+// =============================================================================
+// NOT YET CAPTURED — service ID unknown.
+// Ring service manages R1 Ring settings/config over BLE through glasses.
+// Health sensor data flows: Ring BLE → glasses → Health service (separate path).
+//
+// App binary proto:
+//   RingDataPackage                — wrapper envelope
+//
+// Ring health pipeline (direct BLE, not proto):
+//   BleRing1CmdHealthExt|ackNotifyData    — ack ring health notification
+//   BleRing1CmdHealthExt|getDailyData     — request daily data from ring
+//   BleRing1CmdSettingsStatusExt|setHealthEnable — enable/disable HR/SpO2 monitoring
+//   HealthCtlPrivateFetchExt|_fetchSleepScoreAndSkinTempFromRing — pull sleep data
+//
+// Ring file transfer:
+//   BleRing1FileData / BleRing1FileOriginalData — ring firmware/data
+//
+// TODO: Capture BLE traffic during ring settings to discover service ID
+
+message RingDataPackage {
+  uint32 type = 1;                     // eRingCommandId value
+  uint32 msg_id = 2;
+  // Unknown field layout — needs capture data
+}
+
+
+// =============================================================================
+// SERVICE 0x0D: NAVIGATION / SCREEN STATE [app: navigation_main_msg_ctx, Navigation_Cmd_list]
+// =============================================================================
+
+// 0x0D-00: Navigation Init (glasses→phone, 1 packet per init)
+// Official: navigation_main_msg_ctx, Navigation_Cmd_list
+// UNUSUAL: No type field (field 1 missing), just msg_id + payload
+// C1-C6: {2:15, 3:(empty)}
+// C7:    {2:15, 3:{f1:1, f2:3}} ★ — nav state with page+mode!
+//        f1=1 possibly = dashboard/main, f2=3 = current sub-state or page count
+message NavigationInit {
+  uint32 msg_id = 2;                  // 15
+  NavigationInitPayload payload = 3;  // Often empty, but C7 has {f1:1, f2:3}
+}
+
+message NavigationInitPayload {
+  uint32 current_page = 1;            // 1=dashboard/main (C7), absent in C1-C6
+  uint32 state = 2;                   // 3=navigation state (C7), absent in C1-C6
+}
+
+// 0x0D-01: Screen State Push (glasses→phone, 20/42/27/37/46 packets — very frequent)
+// Unsolicited screen/page change notifications. NO msg_id field.
+// Reports which screen/page is currently active on the glasses.
+//
+// Observed page values (f3.f1):
+//   0/absent:  home screen (f3=(empty))
+//   1:         main app active (generic EvenHub / dashboard)
+//   5:         AI screen (capture 2, with 0x05 service)
+//   6:         Teleprompter screen (capture 2, with 0x06 service)
+//              Also: post-Conversate result display (capture 3)
+//   8:         AI Voice screen (capture 3, with 0x08 service)
+//   11:        Conversate screen (capture 3, with 0x0B service)
+//   224:       Third-party App screen ★ NEW (capture 4, 0xE0) — service ID = screen ID!
+//   266:       Unknown screen (0x10A, capture 4, brief appearance at t=286s)
+//
+// Sub-page values (f3.f2):
+//   3:         transition state (mic start/stop, page changes, session mid)
+//   4:         secondary state (settings, idle, app page)
+//   7:         mic session detail (f3={f1:1, f2:7} during active dashboard mic)
+// 0x0D-01: Screen State (glasses→phone, 20/42/27/37/46/42 packets — very active)
+// Continuous push of current screen page state. No type field, no msg_id.
+// Sent whenever the display context changes.
+//
+// New field: state="" (empty string) = home/idle screen (no active feature)
+//            state = {f1=page} = active feature page
+//            state = {f1=page, f2=sub_page} = feature sub-state
+//
+// Confirmed page→service mapping (6 captures):
+//   page=1   ↔ 0x07 Dashboard / Even home / Notifications
+//   page=5   ↔ 0x05 AI service — Translate mode ★ confirmed C6
+//   page=6   ↔ 0x06 Teleprompter
+//   page=8   ↔ 0x08 AI Voice session
+//   page=11  ↔ 0x0B Conversate (transcription)
+//   page=224 ↔ 0xE0 App Runtime + Navigation ★ (C4)
+//   page=266 ↔ 0x09 Device settings (or unknown app)
+//
+// Confirmed sub_page values:
+//   3:  Feature activation transition (appears briefly after double-tap)
+//   4:  Notification detail/card view ★ confirmed C6
+//   7:  MIC active overlay ★ confirmed C6 (during AI voice mic-on)
+//   34: Streaming/processing overlay (universal: with tele, voice, translate, conversate)
+//
+// Screen-to-service correlation (confirmed across 6 captures):
+//   page=1   ↔ 0x07 Dashboard
+//   page=5   ↔ 0x05 AI heartbeats + state (Translate)
+//   page=6   ↔ 0x06 Teleprompter heartbeats + responses
+//   page=8   ↔ 0x08 AI Voice session
+//   page=11  ↔ 0x0B Conversate heartbeats + state
+//   page=224 ↔ 0xE0 App Runtime + Navigation ★ NEW
+//   page=266 ↔ 0x09 Device settings (or unknown app)
+message ScreenStatePush {
+  uint32 type = 1;                     // Always 1
+  ScreenStatePayload state = 3;       // No msg_id field (field 2 absent!)
+}
+
+message ScreenStatePayload {
+  uint32 page = 1;                     // 0=none, 1=home/dash, 5=translate, 6=tele, 8=voice, 11=conversate, 224=E0 app, 266=unknown
+  uint32 sub_page = 2;                // 3=transition, 4=notif detail, 7=mic active, 34=streaming overlay
+}
+
+
+// =============================================================================
+// SERVICE 0x0E: G2 SETTING / DISPLAY SETTINGS [app: G2SettingPackage, g2_settingCommandId]
+// =============================================================================
+
+// 0x0E-00: Display Settings / G2 Setting (glasses→phone, 27/10/22/11/11/10/29 packets)
+// Official name: G2SettingPackage (from app binary)
+// Official command enum: g2_settingCommandId
+// Three sub-types:
+//   type=1: Parameter with float value — dashboard display geometry
+//   type=2: Simple ACK — {f4.f1=1} — confirms page transition
+//   type=4: Display mode / layout — references param IDs 5+6
+//
+// Float parameters (confirmed across 7 captures):
+//   param_id=2: int=10000, float=103.0→113.0   — page width/position (changes on expand!)
+//   param_id=3: int=2000,  float=207.0→222.0   — page height/position (changes on expand!)
+//   param_id=5: float=91.0                       — viewport X offset (stable)
+//   param_id=6: float=93.0                       — viewport Y offset (stable)
+// Params sent in pairs: (5+6) then (2+3) during init, reversed on page transitions
+//
+// ★ C7 DECODE (29 packets — dashboard navigation via ring scroll):
+//   Init (t=19s): type=4 mode, then params 5,6,2,3,5,6,3,2 (full geometry setup)
+//   Scroll events interleave with type=2 ACKs:
+//     t=28-29s: 3× type=2 ACKs (pages 4→3→2→1 scroll)
+//     t=33s:    type=2 ACK (page 1 click → expand)
+//   Page expand changes params 2+3 to larger values:
+//     Normal: param2=103.0, param3=207.0
+//     Expanded: param2=113.0, param3=222.0
+//   type=4 mode packets appear at page boundaries (4-5 per session)
+//     Always contains entries [{param_ref:5}, {param_ref:6}] — viewport reset
+message DisplaySettings {
+  uint32 type = 1;                     // 1=param, 2=ACK, 4=mode
+  uint32 msg_id = 2;
+  DisplayParam param = 3;             // type=1
+  DisplaySettingsAck ack = 4;         // type=2
+  DisplayMode mode = 6;               // type=4
+}
+
+message DisplayParam {
+  uint32 param_id = 1;                // Parameter identifier (2,3,5,6 confirmed)
+  uint32 int_value = 2;               // Integer value (present for params 2,3)
+  fixed32 float_value = 3;            // IEEE 754 float (present for all params)
+}
+
+message DisplaySettingsAck {
+  uint32 status = 1;                   // 1 = success
+}
+
+message DisplayMode {
+  repeated DisplayModeEntry entries = 1;
+}
+
+message DisplayModeEntry {
+  uint32 param_ref = 1;               // References param_id: 6 confirmed (C2)
+}
+
+// 0x0E-20: Display Config Push (phone→glasses, write-only)
+// Sends display configuration parameters to glasses
+message DisplayConfigPush {
+  uint32 type = 1;                     // 2
+  uint32 msg_id = 2;
+  DisplayConfigPayload config = 4;
+}
+
+message DisplayConfigPayload {
+  uint32 enabled = 1;
+  repeated DisplayConfigRegion regions = 2;
+}
+
+message DisplayConfigRegion {
+  uint32 region_id = 1;               // 2, 3, 4, 5, 6
+  uint32 int_param = 2;
+  float float_param1 = 3;
+  float float_param2 = 4;
+  uint32 param3 = 5;
+  uint32 param4 = 6;
+}
+
+
+// =============================================================================
+// SERVICE 0x10: DEVICE CONFIG [app: DevCfgDataPackage, eDevCfgCommandId]
+// =============================================================================
+
+// 0x10-00: Glasses Config ACK (glasses→phone, 1 packet)
+// Init sequence only. Purpose unclear.
+// Observed: {1:1, 2:18, 3:{1:4}}
+// f3.f1=4 could be: config version, display mode, or state enum
+message GlassesConfigAck {
+  uint32 type = 1;                     // 1
+  uint32 msg_id = 2;
+  GlassesConfigPayload payload = 3;
+}
+
+message GlassesConfigPayload {
+  uint32 value = 1;                    // 4 observed
+}
+
+
+// =============================================================================
+// SERVICE 0x20: COMMIT / SYNC [app: dev_pair_manager]
+// =============================================================================
+
+// 0x20-00: Commit Response (glasses→phone, 2 packets)
+// Init finalization — marks end of init handshake
+// Packet 1: {2:23}              — bare msg_id, no type (unusual)
+// Packet 2: {1:1, 2:24, 4:{1:10}} — standard with payload
+message CommitResponse {
+  uint32 type = 1;                     // 1 (present in 2nd pkt, missing in 1st)
+  uint32 msg_id = 2;                  // 23, 24
+  CommitResponsePayload payload = 4;  // type=1: {f1=10}
+}
+
+message CommitResponsePayload {
+  uint32 value = 1;                    // 10 observed — init step count?
+}
+
+
+// =============================================================================
+// SERVICE 0x80: HEARTBEAT / KEEP-ALIVE [app: BASE_CONNECT_HEART_BEAT]
+// =============================================================================
+
+// 0x80-00: Heartbeat (glasses→phone, 13/29/43 packets)
+// Multi-phase heartbeat, both LEFT and RIGHT arms:
+//   Init phase (t=17-18s):
+//     type=4:   Init heartbeat (L and R arms)
+//     type=5:   Init secondary
+//     type=128: Special init (only once, {f128:(empty)})
+//   Early session (t=25s):
+//     type=6:   Session established
+//   Periodic (every ~15s, alternating L/R) ★ CONFIRMED C3:
+//     type=14:  Keep-alive with empty f13 — 32 of 43 packets in C3!
+//              Alternates: LEFT arm → ~2s → RIGHT arm → ~13s → repeat
+//              Most common packet type in long sessions.
+//
+// Write command 0x80-20 confirmed working for heartbeat.
+// SyncMessage(type=0x0E) sent on 0x80-20, glasses echo on 0x80-00.
+message Heartbeat {
+  uint32 type = 1;                     // 4, 5, 6, 14, 128
+  uint32 msg_id = 2;
+  HeartbeatPayload init = 3;          // type=4
+  HeartbeatPayload init2 = 4;         // type=5
+  HeartbeatPayload early = 5;         // type=6
+  HeartbeatPayload periodic = 13;     // type=14 (main keep-alive)
+  HeartbeatPayload special = 128;     // type=128 (init only)
+}
+
+message HeartbeatPayload {
+  // Always empty in all observed packets across all types
+}
+
+// 0x80-01: Heartbeat Data (glasses→phone, 12 packets)
+// Periodic heartbeat with optional status, RIGHT arm only:
+//   Init (t=17s):
+//     type=4:  {f3.f1=1} — init ACK with status
+//   Periodic (every ~10s):
+//     type=6:  {f5:(empty)} or {f5.f1=1} — keep-alive response
+//   msg_ids: 64→211 over 85s (incrementing by ~15-18 per interval)
+message HeartbeatData {
+  uint32 type = 1;                     // 4, 6
+  uint32 msg_id = 2;                  // 64→211
+  HeartbeatDataPayload init = 3;      // type=4: {f1=1}
+  HeartbeatDataPayload periodic = 5;  // type=6: empty or {f1=1}
+}
+
+message HeartbeatDataPayload {
+  uint32 status = 1;                   // 0 (empty) or 1
+}
+
+// 0x80-20: Heartbeat Command (phone→glasses, write-only)
+// Confirmed working: SyncMessage with type=0x0E triggers heartbeat exchange
+message HeartbeatCommand {
+  uint32 type = 1;                     // 0x0E = sync trigger
+  uint32 msg_id = 2;
+  bytes data = 13;                     // Empty (tag 0x6A, 0x00)
+}
+
+
+// =============================================================================
+// SERVICE 0x81: BATTERY / GLASSES CASE [app: GlassesCaseDataPackage?]
+// =============================================================================
+
+// 0x81-00: Battery Status (glasses→phone, 1 packet)
+// Reports battery level and charging state during init
+// Observed: {1:1, 2:22, 3:{1:100, 2:1}}
+//   f3.f1 = battery percentage (0-100)
+//   f3.f2 = charging state (1=charging)
+// Previously labeled "Display Trigger ACK" — now confirmed as battery
+message BatteryStatus {
+  uint32 type = 1;                     // 1
+  uint32 msg_id = 2;
+  BatteryPayload battery = 3;
+}
+
+message BatteryPayload {
+  uint32 percentage = 1;              // 0-100 (observed: 100 = fully charged)
+  uint32 charging = 2;                // 1 = charging, 0 = on battery
+}
+
+
+// =============================================================================
+// SERVICE 0x91: DEVICE IDENTITY [app: dev_infomation]
+// =============================================================================
+
+// 0x91-00: Device Identity (glasses→phone, 1 packet)
+// Reports device MAC address during init
+// Observed: {1:1, 2:19, 3:{1:b16a9f2f43dc, 2:1}}
+//   f3.f1 = 6-byte MAC address (b1:6a:9f:2f:43:dc)
+//   f3.f2 = status (1)
+message DeviceIdentity {
+  uint32 type = 1;                     // 1
+  uint32 msg_id = 2;
+  DeviceIdentityPayload identity = 3;
+}
+
+message DeviceIdentityPayload {
+  bytes mac_address = 1;              // 6 bytes: b1:6a:9f:2f:43:dc
+  uint32 status = 2;                   // 1 observed
+}
+
+
+// =============================================================================
+// SERVICE 0xE0: APP RUNTIME [app: module_configure? EvenHub extended?]
+// =============================================================================
+
+// 0xE0 is a THIRD-PARTY APP service channel. The EvenHub SDK app running on
+// the glasses reports its UI navigation state and feature toggles through this
+// dedicated high-numbered service range (0xE0 = 224).
+//
+// Key discovery: Service ID = Screen ID! When the app is active, 0x0D-01
+// reports page=224 (0xE0), directly matching the service ID.
+//
+// The app registers three screen names visible in E0-01 navigation data:
+//   "menu"     — main settings/options menu (level=1)
+//   "chatNav"  — chat navigation / message list (level=1)
+//   "actions"  — action options for a chat message (level=2)
+//
+// Discovered in Capture 4 (141920): User toggled silent mode on/off.
+// Silent mode is activated via physical TOUCH BUTTONS on both L and R arms
+// (not a software menu toggle). The E0-00 type=16 reports the hardware
+// toggle state, while E0-01 shows the user navigating the menu to the
+// silent mode setting ("menu" idx=4) around the same time.
+
+// 0xE0-00: App Runtime ACK (glasses→phone, 83/50 packets in C4/C5)
+// Multi-type message with 5 confirmed sub-types.
+// Uses standard {f1=type, f2=seq} envelope.
+//
+// Type mapping (type → field, follows type+2 convention with exceptions):
+//   type=1:  App Init ACK — f4=(empty), sent once when app screen opens
+//   type=8:  UI Interaction ACK — f8.f1=7 (always 7, current app context)
+//            Burst-fires during active navigation, aligns with E0-01 nav events
+//   type=10: Cross-Screen Reference — f12.f1=screen_id
+//            C4: screen_id=11 (Conversate), C5: screen_id=10 (0x0A, unknown)
+//            References another screen's page ID. Appears once near session end.
+//   type=12: App Heartbeat — f15.f2=12 (always 12), ~5s periodic interval
+//            Spans entire app session from launch to exit
+//   type=16: Feature Toggle — f19.f1=1 (enabled), f19=(empty) (disabled)
+//            ★ SILENT MODE: Physical touch button on L+R arms
+//            C4: one toggle cycle. C5: TWO toggle cycles observed.
+//
+// C5 confirms full pattern: init(t=189s) → HB+nav(t=197-254s) →
+//   silent ON(t=235s) → OFF(t=243s) → ON(t=251s) → OFF(t=254s) →
+//   cross-ref(t=268s, screen_id=10)
+message AppRuntimeAck {
+  uint32 type = 1;                     // 1, 8, 10, 12, 16
+  uint32 msg_id = 2;                  // Sequential (54→238)
+  AppRuntimeInit init = 4;            // type=1: init ACK (empty)
+  AppRuntimeNavEvent nav_event = 8;   // type=8: UI interaction ACK
+  AppRuntimeScreenRef screen_ref = 12; // type=10: cross-screen reference
+  AppRuntimeHeartbeat heartbeat = 15; // type=12: periodic keep-alive
+  AppRuntimeToggle toggle = 19;       // type=16: feature toggle (silent mode!)
+}
+
+message AppRuntimeInit {
+  // Empty in observed packet — app init acknowledgment
+}
+
+message AppRuntimeNavEvent {
+  uint32 context = 1;                  // 7 = current app context (always 7 in C4)
+}
+
+message AppRuntimeScreenRef {
+  uint32 screen_id = 1;               // Screen ID ref: 11=Conversate (C4), 10=unknown (C5)
+}
+
+message AppRuntimeHeartbeat {
+  uint32 interval_id = 2;             // 12 = heartbeat marker (always 12 in C4)
+}
+
+message AppRuntimeToggle {
+  uint32 enabled = 1;                  // 1=enabled (present), absent/0=disabled
+  // When enabled=1 (f19.f1=1): feature ON (e.g., silent mode activated)
+  // When field absent (f19=(empty)): feature OFF (e.g., silent mode deactivated)
+  // Silent mode is triggered by physical touch buttons on both L and R arms
+}
+
+
+// 0xE0-01: App Navigation Push (glasses→phone, 39 packets in C4)
+// Unsolicited UI navigation state from the app to the phone.
+// Always type=2, payload exclusively in field 13 (high field number).
+//
+// Two payload variants in f13:
+//   f13.f1 = Navigation event: screen name + optional menu item index
+//     f1.f1 = level (1=primary, 2=secondary)
+//     f1.f2 = screen name string ("menu", "chatNav", "actions")
+//     f1.f4 = menu item index (1-based, optional)
+//
+//   f13.f3 = Screen state transition:
+//     (empty) = idle/transitional state (between navigations)
+//     f3.f1=3 = active (after entering chatNav)
+//     f3.f1=4 = page state A (one of a toggle pair)
+//     f3.f1=5 = page state B (other of a toggle pair)
+//     f3.f1=7 = exit/final state (appears once at session end)
+//
+// Menu item indices observed for "menu" screen:
+//   idx=1: first item, idx=3: third, idx=4: silent mode!, idx=5: fifth
+// The f13.f3.f1 cycling between 4↔5 (t=175-225s) correlates with
+// 0D-01 page changes and represents browsing through app sub-pages.
+//
+// Navigation flow example (C4):
+//   t=45s  idle → t=55s "actions" → t=66s "actions" idx=1 → t=67s "chatNav"
+//   → t=69s "menu" → t=80s "chatNav" → t=82s "menu" idx=1
+//   → t=94s "actions" idx=3 → t=98s "chatNav" → t=105s "menu" idx=4
+//   → t=105.9s SILENT MODE ON → t=111s idle → t=111.4s SILENT MODE OFF
+//   → ... more navigation ... → t=225s state=7 (exit app)
+message AppNavigationPush {
+  uint32 type = 1;                     // Always 2
+  AppNavigationPayload navigation = 13; // High field number (same as heartbeat cmd)
+}
+
+message AppNavigationPayload {
+  AppNavScreen screen = 1;            // Navigation event: screen + optional index
+  AppNavState state = 3;              // Screen state transition
+}
+
+message AppNavScreen {
+  uint32 level = 1;                    // 1=primary (menu, chatNav), 2=secondary (actions)
+  string name = 2;                     // "menu", "chatNav", "actions"
+  uint32 item_index = 4;              // Menu item index, 1-based (optional)
+}
+
+message AppNavState {
+  uint32 page_state = 1;              // 3=active, 4/5=page toggle pair, 7=exit
+}
+
+
+// =============================================================================
+// EvenHub SDK Container Messages (confirmed working for display content)
+// =============================================================================
+
+// Container properties (from SDK PB alignment)
+message ListItemContainerProperty {
+  uint32 Item_Count = 1;
+  uint32 Item_Width = 2;
+  uint32 Is_Item_Select_Border_En = 3;
+  repeated string Item_Name = 4;
+}
+
+message ListContainerProperty {
+  uint32 X_Position = 1;
+  uint32 Y_Position = 2;
+  uint32 Width = 3;
+  uint32 Height = 4;
+  uint32 Border_Width = 5;
+  uint32 Border_Color = 6;
+  uint32 Border_Rdaius = 7;           // Firmware typo: "Rdaius"
+  uint32 Padding_Length = 8;
+  uint32 Container_ID = 9;
+  string Container_Name = 10;
+  ListItemContainerProperty Item_Container = 11;
+  uint32 Is_event_capture = 12;
+}
+
+message TextContainerProperty {
+  uint32 X_Position = 1;
+  uint32 Y_Position = 2;
+  uint32 Width = 3;
+  uint32 Height = 4;
+  uint32 Border_Width = 5;
+  uint32 Border_Color = 6;
+  uint32 Border_Rdaius = 7;
+  uint32 Padding_Length = 8;
+  uint32 Container_ID = 9;
+  string Container_Name = 10;
+  uint32 Is_event_capture = 11;
+  string Content = 12;
+}
+
+message ImageContainerProperty {
+  uint32 X_Position = 1;
+  uint32 Y_Position = 2;
+  uint32 Width = 3;
+  uint32 Height = 4;
+  uint32 Container_ID = 5;
+  string Container_Name = 6;
+}
+
+// Page management (confirmed working in teleprompter_v2.py)
+message CreateStartUpPageContainer {
+  uint32 ContainerTotalNum = 1;
+  repeated ListContainerProperty List_Object = 2;
+  repeated TextContainerProperty Text_Object = 3;
+  repeated ImageContainerProperty Image_Object = 4;
+}
+
+message RebuildPageContainer {
+  uint32 ContainerTotalNum = 1;
+  repeated ListContainerProperty List_Object = 2;
+  repeated TextContainerProperty Text_Object = 3;
+  repeated ImageContainerProperty Image_Object = 4;
+}
+
+message TextContainerUpgrade {
+  uint32 Container_ID = 1;
+  string Container_Name = 2;
+  uint32 ContentOffset = 3;
+  uint32 ContentLength = 4;
+  string Content = 5;
+}
+
+message ImageRawDataUpdateFields {
+  uint32 Container_ID = 1;
+  string Container_Name = 2;
+  uint32 mapSessionId = 3;
+  uint32 mapTotalSize = 4;
+  uint32 compressMode = 5;
+  uint32 mapFragmentIndex = 6;
+  uint32 mapFragmentPacketSize = 7;
+  bytes mapRawData = 8;
+}
+
+message ShutDownContaniner {
+  uint32 exitMode = 1;                // 0=exit immediately, 1=prompt user
+}
+
+
+// =============================================================================
+// EvenHub SDK Events (glasses → Flutter → WebView)
+// =============================================================================
+
+message ListItemEvent {
+  uint32 Container_ID = 1;
+  string Container_Name = 2;
+  string CurrentSelect_ItemName = 3;
+  uint32 CurrentSelect_ItemIndex = 4;
+  OsEventType Event_Type = 5;
+}
+
+message TextItemEvent {
+  uint32 Container_ID = 1;
+  string Container_Name = 2;
+  OsEventType Event_Type = 3;
+}
+
+message SysItemEvent {
+  OsEventType Event_Type = 1;
+}
+
+// Audio at SDK level (post-LC3 decode by Flutter)
+message AudioEventPayload {
+  bytes audioPcm = 1;                 // 3200 bytes = 1600 samples @ 16kHz = 100ms
+}
+
+message EvenHubEvent {
+  ListItemEvent listEvent = 1;
+  TextItemEvent textEvent = 2;
+  SysItemEvent sysEvent = 3;
+  AudioEventPayload audioEvent = 4;
+}
+
+// Audio control (WebView → Flutter → BLE)
+// Triggers Flutter to send mic enable/disable via its own GATT connection
+message AudioControl {
+  bool isOpen = 1;
 }
